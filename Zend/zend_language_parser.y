@@ -89,6 +89,8 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token <ast> T_LNUMBER   "integer"
 %token <ast> T_DNUMBER   "floating-point number"
 %token <ast> T_STRING    "identifier"
+%token <ast> T_MAGIC    "magic member"
+%token <ast> T_STATIC_MAGIC    "static magic member"
 %token <ast> T_NAME_FULLY_QUALIFIED "fully qualified name"
 %token <ast> T_NAME_RELATIVE "namespace-relative name"
 %token <ast> T_NAME_QUALIFIED "namespaced name"
@@ -278,7 +280,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> attribute_decl attribute attributes attribute_group namespace_declaration_name
 %type <ast> match match_arm_list non_empty_match_arm_list match_arm match_arm_cond_list
 %type <ast> enum_declaration_statement enum_backing_type enum_case enum_case_expr
-%type <ast> function_name non_empty_member_modifiers
+%type <ast> function_name non_empty_member_modifiers magic_method
 
 %type <num> returns_ref function fn is_reference is_variadic property_modifiers
 %type <num> method_modifiers class_const_modifiers member_modifier optional_cpp_modifiers
@@ -934,6 +936,15 @@ class_statement_list:
 			{ $$ = zend_ast_create_list(0, ZEND_AST_STMT_LIST); }
 ;
 
+magic_method:
+	 	returns_ref T_MAGIC { $<num>$ = CG(zend_lineno); } backup_doc_comment '(' parameter_list ')' return_type backup_fn_flags method_body backup_fn_flags
+			{ $$ = zend_ast_create_decl(ZEND_AST_METHOD, $1 | ZEND_ACC_PUBLIC | $11, $<num>3, $4,
+				  zend_ast_get_str($2), $6, NULL, $10, $8, NULL); CG(extra_fn_flags) = $9; }
+	|	returns_ref T_STATIC_MAGIC { $<num>$ = CG(zend_lineno); } backup_doc_comment '(' parameter_list ')' return_type backup_fn_flags method_body backup_fn_flags
+			{ $$ =  zend_ast_create_decl(ZEND_AST_METHOD, $1 | ZEND_ACC_PUBLIC | ZEND_ACC_STATIC | $11, $<num>3, $4,
+				  zend_ast_get_str($2), $6, NULL, $10, $8, NULL); CG(extra_fn_flags) = $9;}
+;
+
 
 attributed_class_statement:
 		property_modifiers optional_type_without_static property_list ';'
@@ -950,6 +961,7 @@ attributed_class_statement:
 			{ $$ = zend_ast_create_decl(ZEND_AST_METHOD, $3 | $1 | $12, $2, $5,
 				  zend_ast_get_str($4), $7, NULL, $11, $9, NULL); CG(extra_fn_flags) = $10; }
 	|	enum_case { $$ = $1; }
+	|	magic_method { $$ = $1; }
 ;
 
 class_statement:

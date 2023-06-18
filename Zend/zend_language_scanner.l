@@ -176,6 +176,11 @@ static void yy_pop_state(void)
 	zend_stack_del_top(&SCNG(state_stack));
 }
 
+#define yy_check_state(state_and_tsrm) _yy_check_state(yyc##state_and_tsrm)
+static int _yy_check_state(int state) {
+	return YYGETCONDITION() == state;
+}
+
 static void yy_scan_buffer(char *str, size_t len)
 {
 	YYCURSOR       = (YYCTYPE*)str;
@@ -1285,6 +1290,15 @@ static zend_result exit_nesting(char closing)
 	return SUCCESS;
 }
 
+static void unshift_magic_method_underline(zval *zendlval)
+{
+	char *_tmp_yytext = pemalloc(yyleng + 2, 0);
+	memset(_tmp_yytext, '_', yyleng + 2);
+	memcpy(&_tmp_yytext[2], yytext, yyleng);
+	ZVAL_STRINGL(zendlval, _tmp_yytext, yyleng + 2);
+	efree(_tmp_yytext);
+}
+
 static zend_result check_nesting_at_end(void)
 {
 	if (!zend_stack_is_empty(&SCNG(nest_location_stack))) {
@@ -1394,7 +1408,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_FN);
 }
 
-<ST_IN_SCRIPTING>"function" {
+<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"function" {
 	RETURN_TOKEN_WITH_IDENT(T_FUNCTION);
 }
 
@@ -1538,15 +1552,30 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 }
 
 <ST_IN_SCRIPTING>"class" {
+	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_IDENT(T_CLASS);
 }
 
 <ST_IN_SCRIPTING>"interface" {
+	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_IDENT(T_INTERFACE);
 }
 
 <ST_IN_SCRIPTING>"trait" {
+	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_IDENT(T_TRAIT);
+}
+
+<ST_IN_CLASS>("get"|"call"|"get"|"set"|"isset"|"unset"|"sleep"|"wakeup"|"serialize"|"unserialize"|"toString"|"invoke"|"debugInfo") {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	unshift_magic_method_underline(zendlval);
+	RETURN_TOKEN_WITH_VAL(T_MAGIC);
+}
+
+<ST_IN_CLASS>("callStatic"|"set_state") {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	unshift_magic_method_underline(zendlval);
+	RETURN_TOKEN_WITH_VAL(T_STATIC_MAGIC);
 }
 
 /*
@@ -1555,20 +1584,40 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
  */
 <ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}("extends"|"implements") {
 	yyless(4);
+	yy_push_state(ST_LOOKING_FOR_CLASS);
+	RETURN_TOKEN_WITH_STR(T_STRING, 0);
+}
+<ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}("\+"|":") {
+	yyless(4);
+	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_STR(T_STRING, 0);
 }
 <ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}[a-zA-Z_\x80-\xff] {
 	yyless(4);
+	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_IDENT(T_ENUM);
 }
 
-<ST_IN_SCRIPTING>"extends" {
+<ST_LOOKING_FOR_CLASS>"extends" {
 	RETURN_TOKEN_WITH_IDENT(T_EXTENDS);
 }
 
-<ST_IN_SCRIPTING>"implements" {
+<ST_LOOKING_FOR_CLASS>"+" {
+	RETURN_TOKEN_WITH_IDENT(T_EXTENDS);
+}
+
+<ST_LOOKING_FOR_CLASS>"implements" {
 	RETURN_TOKEN_WITH_IDENT(T_IMPLEMENTS);
 }
+
+<ST_LOOKING_FOR_CLASS>":" {
+	RETURN_TOKEN_WITH_IDENT(T_IMPLEMENTS);
+}
+
+<ST_LOOKING_FOR_CLASS>"," {
+	RETURN_TOKEN(yytext[0]);
+}
+
 
 <ST_IN_SCRIPTING>"->" {
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
@@ -1580,7 +1629,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(T_NULLSAFE_OBJECT_OPERATOR);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_FOR_PROPERTY>{WHITESPACE}+ {
+<ST_IN_SCRIPTING,ST_LOOKING_FOR_PROPERTY,ST_LOOKING_FOR_CLASS,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>{WHITESPACE}+ {
 	goto return_whitespace;
 }
 
@@ -1711,31 +1760,49 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_HALT_COMPILER);
 }
 
-<ST_IN_SCRIPTING>"static" {
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"static" {
 	RETURN_TOKEN_WITH_IDENT(T_STATIC);
 }
 
-<ST_IN_SCRIPTING>"abstract" {
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"abstract" {
 	RETURN_TOKEN_WITH_IDENT(T_ABSTRACT);
 }
 
-<ST_IN_SCRIPTING>"final" {
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"final" {
 	RETURN_TOKEN_WITH_IDENT(T_FINAL);
 }
 
-<ST_IN_SCRIPTING>"private" {
+<ST_IN_CLASS>"private" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
 	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
 }
 
-<ST_IN_SCRIPTING>"protected" {
+<ST_IN_CLASS>"own" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
+}
+
+<ST_IN_CLASS>"protected" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
 	RETURN_TOKEN_WITH_IDENT(T_PROTECTED);
 }
 
-<ST_IN_SCRIPTING>"public" {
+<ST_IN_CLASS>"kin" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
+}
+
+<ST_IN_CLASS>"public" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
 	RETURN_TOKEN_WITH_IDENT(T_PUBLIC);
 }
 
-<ST_IN_SCRIPTING>"readonly" {
+<ST_IN_CLASS>"any" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
+}
+
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"readonly" {
 	RETURN_TOKEN_WITH_IDENT(T_READONLY);
 }
 
@@ -1884,16 +1951,18 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG);
 }
 
-<ST_IN_SCRIPTING>"&" {
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"&" {
 	RETURN_TOKEN(T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG);
 }
 
-<ST_IN_SCRIPTING>"]"|")" {
+<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"]"|")" {
 	/* Check that ] and ) match up properly with a preceding [ or ( */
+	yy_pop_state();
 	RETURN_EXIT_NESTING_TOKEN(yytext[0]);
 }
 
-<ST_IN_SCRIPTING>"["|"(" {
+<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"["|"(" {
+	yy_push_state(ST_IN_SCRIPTING);
 	enter_nesting(yytext[0]);
 	RETURN_TOKEN(yytext[0]);
 }
@@ -1902,9 +1971,14 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(yytext[0]);
 }
 
-
-<ST_IN_SCRIPTING>"{" {
-	yy_push_state(ST_IN_SCRIPTING);
+<ST_IN_SCRIPTING,ST_LOOKING_FOR_CLASS,ST_LOOKING_CLASS_MEMBER>"{" {
+	if(yy_check_state(ST_LOOKING_FOR_CLASS)) {
+		yy_pop_state();
+		yy_push_state(ST_IN_CLASS);
+	} else {
+		yy_push_state(ST_IN_SCRIPTING);
+	}
+	
 	enter_nesting('{');
 	RETURN_TOKEN('{');
 }
@@ -1916,9 +1990,12 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(T_DOLLAR_OPEN_CURLY_BRACES);
 }
 
-<ST_IN_SCRIPTING>"}" {
+<ST_IN_SCRIPTING,ST_IN_CLASS>"}" {
 	RESET_DOC_COMMENT();
 	if (!zend_stack_is_empty(&SCNG(state_stack))) {
+		yy_pop_state();
+	}
+	if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
 		yy_pop_state();
 	}
 	RETURN_EXIT_NESTING_TOKEN('}');
@@ -2380,7 +2457,7 @@ inline_char_handler:
 	RETURN_TOKEN(T_NS_SEPARATOR);
 }
 
-<ST_IN_SCRIPTING,ST_VAR_OFFSET>{LABEL} {
+<ST_IN_SCRIPTING,ST_VAR_OFFSET,ST_LOOKING_FOR_CLASS,ST_LOOKING_CLASS_MEMBER>{LABEL} {
 	RETURN_TOKEN_WITH_STR(T_STRING, 0);
 }
 
@@ -2409,7 +2486,7 @@ inline_char_handler:
 	RETURN_OR_SKIP_TOKEN(T_COMMENT);
 }
 
-<ST_IN_SCRIPTING>"/*"|"/**"{WHITESPACE} {
+<ST_IN_SCRIPTING,ST_LOOKING_FOR_CLASS,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"/*"|"/**"{WHITESPACE} {
 	int doc_com;
 
 	if (yyleng > 2) {
