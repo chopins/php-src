@@ -117,7 +117,7 @@ do {																			\
 
 #define ZEND_IS_OCT(c)  ((c)>='0' && (c)<='7')
 #define ZEND_IS_HEX(c)  (((c)>='0' && (c)<='9') || ((c)>='a' && (c)<='f') || ((c)>='A' && (c)<='F'))
-
+#define mydprint(s)	printf("\r\n============Find %s=====\r\n%s\r\n",s,yytext)
 
 static void strip_underscores(char *str, size_t *len)
 {
@@ -1420,8 +1420,11 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_RETURN);
 }
 
-<ST_IN_SCRIPTING>"#[" {
+<ST_IN_SCRIPTING,ST_IN_CLASS>"#[" {
 	enter_nesting('[');
+	if(yy_check_state(ST_IN_CLASS)) {
+		yy_push_state(ST_IN_SCRIPTING);
+	}
 	RETURN_TOKEN(T_ATTRIBUTE);
 }
 
@@ -1957,7 +1960,9 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 
 <ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"]"|")" {
 	/* Check that ] and ) match up properly with a preceding [ or ( */
-	yy_pop_state();
+	if (!zend_stack_is_empty(&SCNG(state_stack))) {
+		yy_pop_state();
+	}
 	RETURN_EXIT_NESTING_TOKEN(yytext[0]);
 }
 
