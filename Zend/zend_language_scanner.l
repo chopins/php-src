@@ -177,9 +177,24 @@ static void yy_pop_state(void)
 }
 
 #define yy_check_state(state_and_tsrm) _yy_check_state(yyc##state_and_tsrm)
-static int _yy_check_state(int state) {
+
+static int _yy_check_state(int state)
+{
 	return YYGETCONDITION() == state;
 }
+
+#define yy_check_stack_top(state_and_tsrm) __yy_check_stack_top(yyc##state_and_tsrm)
+
+static int __yy_check_stack_top(int state)
+{
+	if(SCNG(state_stack).top == 0) {
+		return false;
+	}
+	int *stack_state = zend_stack_top(&SCNG(state_stack));
+	return state == *stack_state;
+}
+
+#define PUSH_MEMBER_STATE if(yy_check_state(ST_IN_CLASS)){yy_push_state(ST_LOOKING_CLASS_MEMBER);}
 
 static void yy_scan_buffer(char *str, size_t len)
 {
@@ -1408,7 +1423,10 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_FN);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"function" {
+<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER,ST_IN_CLASS>"function" {
+	if(yy_check_state(ST_IN_CLASS)) {
+		yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	}
 	RETURN_TOKEN_WITH_IDENT(T_FUNCTION);
 }
 
@@ -1675,7 +1693,8 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_CLONE);
 }
 
-<ST_IN_SCRIPTING>"var" {
+<ST_IN_CLASS>"var" {
+	yy_push_state(ST_LOOKING_CLASS_MEMBER);
 	RETURN_TOKEN_WITH_IDENT(T_VAR);
 }
 
@@ -1775,33 +1794,33 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_FINAL);
 }
 
-<ST_IN_CLASS>"private" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"private" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
 }
 
-<ST_IN_CLASS>"own" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"own" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
 }
 
-<ST_IN_CLASS>"protected" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"protected" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PROTECTED);
 }
 
-<ST_IN_CLASS>"kin" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"kin" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
 }
 
-<ST_IN_CLASS>"public" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"public" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PUBLIC);
 }
 
-<ST_IN_CLASS>"any" {
-	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+<ST_IN_SCRIPTING,ST_IN_CLASS>"any" {
+	PUSH_MEMBER_STATE
 	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
 }
 
@@ -1972,7 +1991,14 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(yytext[0]);
 }
 
+<ST_LOOKING_CLASS_MEMBER>";" {
+	yy_pop_state();
+	RETURN_TOKEN(yytext[0]);
+}
 <ST_IN_SCRIPTING>{TOKENS} {
+	if(yytext[0] == ';' && yy_check_stack_top(ST_IN_CLASS)) {
+		yy_pop_state();
+	}
 	RETURN_TOKEN(yytext[0]);
 }
 
@@ -1983,7 +2009,6 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	} else {
 		yy_push_state(ST_IN_SCRIPTING);
 	}
-	
 	enter_nesting('{');
 	RETURN_TOKEN('{');
 }
@@ -2003,6 +2028,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
 		yy_pop_state();
 	}
+	
 	RETURN_EXIT_NESTING_TOKEN('}');
 }
 
@@ -2424,7 +2450,11 @@ inline_char_handler:
 	RETURN_TOKEN_WITH_STR(T_VARIABLE, 1);
 }
 
-<ST_IN_SCRIPTING,ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE,ST_VAR_OFFSET>"$"{LABEL} {
+<ST_IN_SCRIPTING,ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE,ST_VAR_OFFSET,ST_LOOKING_CLASS_MEMBER>"$"{LABEL} {
+	if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
+		yy_pop_state();
+		yy_push_state(ST_IN_SCRIPTING);
+	}
 	RETURN_TOKEN_WITH_STR(T_VARIABLE, 1);
 }
 
