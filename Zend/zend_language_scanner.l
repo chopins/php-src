@@ -1977,16 +1977,21 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"]"|")" {
+<ST_IN_SCRIPTING>"]"|")" {
 	/* Check that ] and ) match up properly with a preceding [ or ( */
-	if (!zend_stack_is_empty(&SCNG(state_stack))) {
+	if(yytext[0] == ']' && yy_check_stack_top(ST_IN_CLASS)) {
 		yy_pop_state();
 	}
 	RETURN_EXIT_NESTING_TOKEN(yytext[0]);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER>"["|"(" {
+<ST_LOOKING_CLASS_MEMBER>"(" {
 	yy_push_state(ST_IN_SCRIPTING);
+	enter_nesting(yytext[0]);
+	RETURN_TOKEN(yytext[0]);
+}
+
+<ST_IN_SCRIPTING>"["|"(" {
 	enter_nesting(yytext[0]);
 	RETURN_TOKEN(yytext[0]);
 }
@@ -2002,7 +2007,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(yytext[0]);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_FOR_CLASS,ST_LOOKING_CLASS_MEMBER>"{" {
+<ST_IN_SCRIPTING,ST_LOOKING_FOR_CLASS>"{" {
 	if(yy_check_state(ST_LOOKING_FOR_CLASS)) {
 		yy_pop_state();
 		yy_push_state(ST_IN_CLASS);
@@ -2025,10 +2030,13 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	if (!zend_stack_is_empty(&SCNG(state_stack))) {
 		yy_pop_state();
 	}
-	if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
+	if(yy_check_stack_top(ST_LOOKING_CLASS_MEMBER)) {
+		yy_pop_state();
 		yy_pop_state();
 	}
-	
+	if(yy_check_state(ST_IN_CLASS)) {
+		mydprint("ST_IN_CLASS");
+	}
 	RETURN_EXIT_NESTING_TOKEN('}');
 }
 
