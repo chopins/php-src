@@ -117,7 +117,7 @@ do {																			\
 
 #define ZEND_IS_OCT(c)  ((c)>='0' && (c)<='7')
 #define ZEND_IS_HEX(c)  (((c)>='0' && (c)<='9') || ((c)>='a' && (c)<='f') || ((c)>='A' && (c)<='F'))
-#define mydprint(s)	printf("\r\n============Find %s=====\r\n%s\r\n",s,yytext)
+#define mydprint(s)	printf("\r\n=====Find %s==State:%d==Stack:%d==yyleng:%d====\r\n%s\r\n",s,YYGETCONDITION(),SCNG(state_stack).top,yyleng, yytext)
 
 static void strip_underscores(char *str, size_t *len)
 {
@@ -1426,7 +1426,21 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 <ST_IN_SCRIPTING,ST_LOOKING_CLASS_MEMBER,ST_IN_CLASS>"function" {
 	if(yy_check_state(ST_IN_CLASS)) {
 		yy_push_state(ST_LOOKING_CLASS_MEMBER);
+		yy_push_state(ST_IN_SCRIPTING);
+	}else if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
+		yy_push_state(ST_IN_SCRIPTING);
 	}
+	RETURN_TOKEN_WITH_IDENT(T_FUNCTION);
+}
+
+<ST_LOOKING_CLASS_MEMBER>{WHITESPACE}{LABEL}{OPTIONAL_WHITESPACE}("//"|"/*"|"(") {
+	size_t pos = 0;
+	while (yytext[pos] == ' ' || yytext[pos] == '\r' || yytext[pos] == '\t' || yytext[pos] == '\n')
+	{
+		pos++;
+	}
+	yyless(pos);
+	yy_push_state(ST_IN_SCRIPTING);
 	RETURN_TOKEN_WITH_IDENT(T_FUNCTION);
 }
 
@@ -1438,11 +1452,22 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_RETURN);
 }
 
-<ST_IN_SCRIPTING,ST_IN_CLASS>"#[" {
-	enter_nesting('[');
-	if(yy_check_state(ST_IN_CLASS)) {
-		yy_push_state(ST_IN_SCRIPTING);
+<ST_IN_SCRIPTING>"@@" {
+	yyless(2);
+	RETURN_TOKEN(T_SILENCE);
+}
+
+// <ST_IN_SCRIPTING,ST_IN_CLASS>"#[" {
+// 	enter_nesting('[');
+// 	yy_push_state(ST_LOOKING_ATTRIBUTE);
+// 	RETURN_TOKEN(T_ATTRIBUTE);
+// }
+
+<ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_ATTRIBUTE>"@" {
+	if(!yy_check_state(ST_LOOKING_ATTRIBUTE)) {
+		yy_push_state(ST_LOOKING_ATTRIBUTE);
 	}
+	yyless(1);
 	RETURN_TOKEN(T_ATTRIBUTE);
 }
 
@@ -1589,12 +1614,14 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 
 <ST_IN_CLASS>("get"|"call"|"get"|"set"|"isset"|"unset"|"sleep"|"wakeup"|"serialize"|"unserialize"|"toString"|"invoke"|"debugInfo") {
 	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	yy_push_state(ST_IN_SCRIPTING);
 	unshift_magic_method_underline(zendlval);
 	RETURN_TOKEN_WITH_VAL(T_MAGIC);
 }
 
 <ST_IN_CLASS>("callStatic"|"set_state") {
 	yy_push_state(ST_LOOKING_CLASS_MEMBER);
+	yy_push_state(ST_IN_SCRIPTING);
 	unshift_magic_method_underline(zendlval);
 	RETURN_TOKEN_WITH_VAL(T_STATIC_MAGIC);
 }
@@ -1605,12 +1632,10 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
  */
 <ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}("extends"|"implements") {
 	yyless(4);
-	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_STR(T_STRING, 0);
 }
 <ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}("\+"|":") {
 	yyless(4);
-	yy_push_state(ST_LOOKING_FOR_CLASS);
 	RETURN_TOKEN_WITH_STR(T_STRING, 0);
 }
 <ST_IN_SCRIPTING>"enum"{WHITESPACE_OR_COMMENTS}[a-zA-Z_\x80-\xff] {
@@ -1639,7 +1664,6 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(yytext[0]);
 }
 
-
 <ST_IN_SCRIPTING>"->" {
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN(T_OBJECT_OPERATOR);
@@ -1648,6 +1672,18 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 <ST_IN_SCRIPTING>"?->" {
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN(T_NULLSAFE_OBJECT_OPERATOR);
+}
+
+<ST_LOOKING_CLASS_MEMBER>{WHITESPACE}"&" {
+	yyless(yyleng - 1);
+	yy_push_state(ST_IN_SCRIPTING);
+	RETURN_TOKEN_WITH_IDENT(T_FUNCTION);
+}
+
+<ST_LOOKING_ATTRIBUTE>{WHITESPACE}+ {
+	yy_pop_state();
+	HANDLE_NEWLINES(yytext, yyleng);
+	RETURN_TOKEN(T_ATTRIBUTE_END);
 }
 
 <ST_IN_SCRIPTING,ST_LOOKING_FOR_PROPERTY,ST_LOOKING_FOR_CLASS,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>{WHITESPACE}+ {
@@ -1758,7 +1794,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN_WITH_IDENT(T_NAMESPACE);
 }
 
-<ST_IN_SCRIPTING>"use" {
+<ST_IN_SCRIPTING,ST_IN_CLASS>"use" {
 	RETURN_TOKEN_WITH_IDENT(T_USE);
 }
 
@@ -1811,7 +1847,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 
 <ST_IN_SCRIPTING,ST_IN_CLASS>"kin" {
 	PUSH_MEMBER_STATE
-	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
+	RETURN_TOKEN_WITH_IDENT(T_PROTECTED);
 }
 
 <ST_IN_SCRIPTING,ST_IN_CLASS>"public" {
@@ -1821,7 +1857,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 
 <ST_IN_SCRIPTING,ST_IN_CLASS>"any" {
 	PUSH_MEMBER_STATE
-	RETURN_TOKEN_WITH_IDENT(T_PRIVATE);
+	RETURN_TOKEN_WITH_IDENT(T_PUBLIC);
 }
 
 <ST_IN_SCRIPTING,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER>"readonly" {
@@ -1979,13 +2015,13 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 
 <ST_IN_SCRIPTING>"]"|")" {
 	/* Check that ] and ) match up properly with a preceding [ or ( */
-	if(yytext[0] == ']' && yy_check_stack_top(ST_IN_CLASS)) {
+	if(yytext[0] == ')' && yy_check_stack_top(ST_LOOKING_ATTRIBUTE)) {
 		yy_pop_state();
 	}
 	RETURN_EXIT_NESTING_TOKEN(yytext[0]);
 }
 
-<ST_LOOKING_CLASS_MEMBER>"(" {
+<ST_LOOKING_ATTRIBUTE>"(" {
 	yy_push_state(ST_IN_SCRIPTING);
 	enter_nesting(yytext[0]);
 	RETURN_TOKEN(yytext[0]);
@@ -2000,7 +2036,7 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	yy_pop_state();
 	RETURN_TOKEN(yytext[0]);
 }
-<ST_IN_SCRIPTING>{TOKENS} {
+<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE,ST_IN_CLASS,ST_LOOKING_CLASS_MEMBER,ST_LOOKING_FOR_CLASS>{TOKENS} {
 	if(yytext[0] == ';' && yy_check_stack_top(ST_IN_CLASS)) {
 		yy_pop_state();
 	}
@@ -2033,9 +2069,6 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	if(yy_check_stack_top(ST_LOOKING_CLASS_MEMBER)) {
 		yy_pop_state();
 		yy_pop_state();
-	}
-	if(yy_check_state(ST_IN_CLASS)) {
-		mydprint("ST_IN_CLASS");
 	}
 	RETURN_EXIT_NESTING_TOKEN('}');
 }
@@ -2488,11 +2521,11 @@ inline_char_handler:
 	RETURN_TOKEN_WITH_STR(T_NAME_RELATIVE, sizeof("namespace\\") - 1);
 }
 
-<ST_IN_SCRIPTING>{LABEL}("\\"{LABEL})+ {
+<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>{LABEL}("\\"{LABEL})+ {
 	RETURN_TOKEN_WITH_STR(T_NAME_QUALIFIED, 0);
 }
 
-<ST_IN_SCRIPTING>"\\"{LABEL}("\\"{LABEL})* {
+<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>"\\"{LABEL}("\\"{LABEL})* {
 	RETURN_TOKEN_WITH_STR(T_NAME_FULLY_QUALIFIED, 1);
 }
 
@@ -2500,7 +2533,7 @@ inline_char_handler:
 	RETURN_TOKEN(T_NS_SEPARATOR);
 }
 
-<ST_IN_SCRIPTING,ST_VAR_OFFSET,ST_LOOKING_FOR_CLASS,ST_LOOKING_CLASS_MEMBER>{LABEL} {
+<ST_IN_SCRIPTING,ST_VAR_OFFSET,ST_LOOKING_FOR_CLASS,ST_LOOKING_CLASS_MEMBER,ST_LOOKING_ATTRIBUTE>{LABEL} {
 	RETURN_TOKEN_WITH_STR(T_STRING, 0);
 }
 
