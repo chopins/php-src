@@ -1,4 +1,8 @@
 # PHP alternative syntax
+
+- [x] 以下表示已完成, this completed
+- [ ] 以下表示未完成, this todo
+----
 - [ ] 可以去掉PHP标签`<?php`,`?>`
 - [ ] 命名空间分割符可以使用句点号`.`，以点开头时为相对空间
     ```php
@@ -6,7 +10,7 @@
     use NS4.NS5;
     use .NS4.NS6; //equivalent NS1.NS2.NS3.NS4.NS6
     ```
-- [ ] 属性可以以`@`开头，错误抑制号改用`@@`号，替换`#[]`
+- [x] 属性可以以`@`开头，错误抑制号改用`@@`号，替换`#[]`
     ```php
     @attr1
     class ClassName {
@@ -30,7 +34,7 @@
         own function privateMethod() {}
     }
     ```
-- [ ] 类方法申明可省略`function`关键字
+- [x] 类方法申明可省略`function`关键字
     ```php
     class ClassName {
         public publicMethod1() {}
@@ -131,7 +135,7 @@
     }
     var_dump($block); //output:2
     ```
-- [ ] `for`结构支持`foreach`,`while`语法
+- [x] `for`结构支持`foreach`,`while`语法
     ```php
     //example 1:
     for($arr as $k => $v) {
@@ -151,9 +155,9 @@
     }
 
     //example 3:
-    do for($v > 1) {
+    do {
 
-    }
+    }for($v > 1);
     //equivalent to
     do {
 
