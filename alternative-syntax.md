@@ -10,13 +10,19 @@
     use NS4.NS5;
     use .NS4.NS6; //equivalent NS1.NS2.NS3.NS4.NS6
     ```
-- [x] 属性可以以`@`开头，错误抑制号改用`@@`号，替换`#[]`
+- [x] 属性改为以`@`开头，错误抑制号改用`@@`号，删除`#[]`。每个属性后必须跟随空白，属性名与`(`之间不能有空格
     ```php
-    @attr1
+    @attr1 @attr2()
+    @attr3
     class ClassName {
         @attr2
         public function method() {}
     }
+
+    //@att5(),att6 is syntax error, right use @attr5 @attr6
+    //@att6 ()  is syntax error, no whitspace,right use @attr6()
+    //@att@attr is syntax error,  right use @attr @attr
+    //@attr()@attr2 is syntax error, right use @attr() @attr
     ```
 - [x] 可使用`+`代替`extends`，使用`:`代替`implements`
     ```php
