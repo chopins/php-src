@@ -11,7 +11,7 @@ simplified write and reuse keyword 简化书写，复用关键字。
     namespace NS1.NS2.NS3;
     use NS4.NS5;
     ```
-- [x] A attribute use `@` instead of `#[]`，silence use `@@`，remove`#[]`。after every attribute must have whitespace, betwen in attribute label and `(` can be no whitespace
+- [x] A attribute use `@` instead of `#[]`，silence token use `@@`，remove`#[]`。after every attribute must have whitespace, betwen in attribute label and `(` can be no whitespace
     ```php
     @attr1 @attr2()
     @attr3
