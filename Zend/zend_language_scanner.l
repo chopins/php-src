@@ -1404,9 +1404,9 @@ OPTIONAL_WHITESPACE [ \n\r\t]*
  * the token. We prevent this by not allowing 0 bytes, which already aren't valid anyway. */
 MULTI_LINE_COMMENT "/*"([^*\x00]*"*"+)([^*/\x00][^*\x00]*"*"+)*"/"
 SINGLE_LINE_COMMENT "//"[^\x00\n\r]*[\n\r]
-HASH_COMMENT "#"(([^[\x00][^\x00\n\r]*[\n\r])|[\n\r])
-WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_COMMENT}|{HASH_COMMENT})+
-OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_COMMENT}|{HASH_COMMENT})*
+/* HASH_COMMENT "#"(([^[\x00][^\x00\n\r]*[\n\r])|[\n\r])*/
+WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_COMMENT})+
+OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_COMMENT})*
 
 /* compute yyleng before each rule */
 <!*> := yyleng = YYCURSOR - SCNG(yy_text);
@@ -1664,12 +1664,19 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(yytext[0]);
 }
 
-<ST_IN_SCRIPTING>"->" {
+<ST_LOOKING_SCRIPT_VARIABLE>"." {
+	yy_pop_state();
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN(T_OBJECT_OPERATOR);
 }
 
-<ST_IN_SCRIPTING>"?->" {
+<ST_LOOKING_SCRIPT_VARIABLE>[^. \r\t\n] {
+	yyless(0);
+	yy_pop_state();
+	goto restart;
+}
+
+<ST_IN_SCRIPTING>"?." {
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN(T_NULLSAFE_OBJECT_OPERATOR);
 }
@@ -1690,11 +1697,11 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	goto return_whitespace;
 }
 
-<ST_LOOKING_FOR_PROPERTY>"->" {
+<ST_LOOKING_FOR_PROPERTY>"." {
 	RETURN_TOKEN(T_OBJECT_OPERATOR);
 }
 
-<ST_LOOKING_FOR_PROPERTY>"?->" {
+<ST_LOOKING_FOR_PROPERTY>"?." {
 	RETURN_TOKEN(T_NULLSAFE_OBJECT_OPERATOR);
 }
 
@@ -1944,8 +1951,12 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	RETURN_TOKEN(T_DIV_EQUAL);
 }
 
-<ST_IN_SCRIPTING>".=" {
+<ST_IN_SCRIPTING>"#=" {
 	RETURN_TOKEN(T_CONCAT_EQUAL);
+}
+
+<ST_IN_SCRIPTING>"#" {
+	RETURN_TOKEN(yytext[0]);
 }
 
 <ST_IN_SCRIPTING>"%=" {
@@ -2017,6 +2028,8 @@ OPTIONAL_WHITESPACE_OR_COMMENTS ({WHITESPACE}|{MULTI_LINE_COMMENT}|{SINGLE_LINE_
 	/* Check that ] and ) match up properly with a preceding [ or ( */
 	if(yytext[0] == ')' && yy_check_stack_top(ST_LOOKING_ATTRIBUTE)) {
 		yy_pop_state();
+	} else {
+		yy_push_state(ST_LOOKING_SCRIPT_VARIABLE);
 	}
 	RETURN_EXIT_NESTING_TOKEN(yytext[0]);
 }
@@ -2471,13 +2484,13 @@ inline_char_handler:
 /* Make sure a label character follows "->" or "?->", otherwise there is no property
  * and "->"/"?->" will be taken literally
  */
-<ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE>"$"{LABEL}"->"[a-zA-Z_\x80-\xff] {
+<ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE>"$"{LABEL}"."[a-zA-Z_\x80-\xff] {
 	yyless(yyleng - 3);
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN_WITH_STR(T_VARIABLE, 1);
 }
 
-<ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE>"$"{LABEL}"?->"[a-zA-Z_\x80-\xff] {
+<ST_DOUBLE_QUOTES,ST_HEREDOC,ST_BACKQUOTE>"$"{LABEL}"?."[a-zA-Z_\x80-\xff] {
 	yyless(yyleng - 4);
 	yy_push_state(ST_LOOKING_FOR_PROPERTY);
 	RETURN_TOKEN_WITH_STR(T_VARIABLE, 1);
@@ -2495,6 +2508,8 @@ inline_char_handler:
 	if(yy_check_state(ST_LOOKING_CLASS_MEMBER)) {
 		yy_pop_state();
 		yy_push_state(ST_IN_SCRIPTING);
+	} else {
+		yy_push_state(ST_LOOKING_SCRIPT_VARIABLE);
 	}
 	RETURN_TOKEN_WITH_STR(T_VARIABLE, 1);
 }
@@ -2509,7 +2524,7 @@ inline_char_handler:
 	RETURN_TOKEN(yytext[0]);
 }
 
-<ST_VAR_OFFSET>[ \n\r\t\\'#] {
+<ST_VAR_OFFSET>[ \n\r\t\\'] {
 	/* Invalid rule to return a more explicit parse error with proper line number */
 	yyless(0);
 	yy_pop_state();
@@ -2517,19 +2532,19 @@ inline_char_handler:
 	RETURN_TOKEN_WITH_VAL(T_ENCAPSED_AND_WHITESPACE);
 }
 
-<ST_IN_SCRIPTING>"namespace"("\\"{LABEL})+ {
-	RETURN_TOKEN_WITH_STR(T_NAME_RELATIVE, sizeof("namespace\\") - 1);
+<ST_IN_SCRIPTING>"namespace"("."{LABEL})+ {
+	RETURN_TOKEN_WITH_STR(T_NAME_RELATIVE, sizeof("namespace.") - 1);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>{LABEL}("\\"{LABEL})+ {
+<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>{LABEL}("."{LABEL})+ {
 	RETURN_TOKEN_WITH_STR(T_NAME_QUALIFIED, 0);
 }
 
-<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>"\\"{LABEL}("\\"{LABEL})* {
+<ST_IN_SCRIPTING,ST_LOOKING_ATTRIBUTE>"."{LABEL}("."{LABEL})* {
 	RETURN_TOKEN_WITH_STR(T_NAME_FULLY_QUALIFIED, 1);
 }
 
-<ST_IN_SCRIPTING>"\\" {
+<ST_IN_SCRIPTING>"." {
 	RETURN_TOKEN(T_NS_SEPARATOR);
 }
 
@@ -2538,7 +2553,7 @@ inline_char_handler:
 }
 
 
-<ST_IN_SCRIPTING>"#"|"//" {
+<ST_IN_SCRIPTING>"//" {
 	while (YYCURSOR < YYLIMIT) {
 		switch (*YYCURSOR++) {
 			case '\r':
@@ -2750,7 +2765,6 @@ skip_escape_conversion:
 	BEGIN(ST_DOUBLE_QUOTES);
 	RETURN_TOKEN('"');
 }
-
 
 <ST_IN_SCRIPTING>b?"<<<"{TABS_AND_SPACES}({LABEL}|([']{LABEL}['])|(["]{LABEL}["])){NEWLINE} {
 	char *s;

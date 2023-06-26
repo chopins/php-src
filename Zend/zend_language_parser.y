@@ -71,7 +71,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %left T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG
 %nonassoc T_IS_EQUAL T_IS_NOT_EQUAL T_IS_IDENTICAL T_IS_NOT_IDENTICAL T_SPACESHIP
 %nonassoc '<' T_IS_SMALLER_OR_EQUAL '>' T_IS_GREATER_OR_EQUAL
-%left '.'
+%left '#'
 %left T_SL T_SR
 %left '+' '-'
 %left '*' '/' '%'
@@ -188,7 +188,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_MINUS_EQUAL  "'-='"
 %token T_MUL_EQUAL    "'*='"
 %token T_DIV_EQUAL    "'/='"
-%token T_CONCAT_EQUAL "'.='"
+%token T_CONCAT_EQUAL "'#='"
 %token T_MOD_EQUAL    "'%='"
 %token T_AND_EQUAL    "'&='"
 %token T_OR_EQUAL     "'|='"
@@ -217,8 +217,8 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_BOOL_CAST   "'(bool)'"
 %token T_UNSET_CAST  "'(unset)'"
 %token T_SILENCE    "'@@'"
-%token T_OBJECT_OPERATOR "'->'"
-%token T_NULLSAFE_OBJECT_OPERATOR "'?->'"
+%token T_OBJECT_OPERATOR "'.'"
+%token T_NULLSAFE_OBJECT_OPERATOR "'?.'"
 %token T_DOUBLE_ARROW    "'=>'"
 %token T_COMMENT         "comment"
 %token T_DOC_COMMENT     "doc comment"
@@ -231,7 +231,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_DOLLAR_OPEN_CURLY_BRACES "'${'"
 %token T_CURLY_OPEN      "'{$'"
 %token T_PAAMAYIM_NEKUDOTAYIM "'::'"
-%token T_NS_SEPARATOR    "'\\'"
+%token T_NS_SEPARATOR    "'namespace sepatator'"
 %token T_ELLIPSIS        "'...'"
 %token T_COALESCE        "'??'"
 %token T_POW             "'**'"
@@ -1212,7 +1212,7 @@ expr:
 	|	expr T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG expr	{ $$ = zend_ast_create_binary_op(ZEND_BW_AND, $1, $3); }
 	|	expr T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG expr	{ $$ = zend_ast_create_binary_op(ZEND_BW_AND, $1, $3); }
 	|	expr '^' expr	{ $$ = zend_ast_create_binary_op(ZEND_BW_XOR, $1, $3); }
-	|	expr '.' expr 	{ $$ = zend_ast_create_concat_op($1, $3); }
+	|	expr '#' expr 	{ $$ = zend_ast_create_concat_op($1, $3); }
 	|	expr '+' expr 	{ $$ = zend_ast_create_binary_op(ZEND_ADD, $1, $3); }
 	|	expr '-' expr 	{ $$ = zend_ast_create_binary_op(ZEND_SUB, $1, $3); }
 	|	expr '*' expr	{ $$ = zend_ast_create_binary_op(ZEND_MUL, $1, $3); }
@@ -1281,7 +1281,6 @@ expr:
 			{ $$ = zend_ast_with_attributes($3, $1); ((zend_ast_decl *) $$)->flags |= ZEND_ACC_STATIC; }
 	|	match { $$ = $1; }
 ;
-
 
 inline_function:
 		function returns_ref backup_doc_comment '(' parameter_list ')' lexical_vars return_type

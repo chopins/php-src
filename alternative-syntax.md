@@ -4,11 +4,10 @@
 - [ ] 以下表示未完成, this todo
 ----
 - [ ] 可以去掉PHP标签`<?php`,`?>`
-- [ ] 命名空间分割符可以使用句点号`.`，以点开头时为相对空间
+- [x] 命名空间分割符可以使用句点号`.`,规则如故
     ```php
     namespace NS1.NS2.NS3;
     use NS4.NS5;
-    use .NS4.NS6; //equivalent NS1.NS2.NS3.NS4.NS6
     ```
 - [x] 属性改为以`@`开头，错误抑制号改用`@@`号，删除`#[]`。每个属性后必须跟随空白，属性名与`(`之间不能有空格
     ```php
@@ -68,7 +67,7 @@
         }
     }
     ```
-- [ ] 对象操作符改用句点号`.`
+- [x] 对象操作符改用句点号`.`
     ```php
     class ClassName {
         any int $property;
@@ -81,12 +80,40 @@
         }
     }
     ```
-- [ ] 字符串连接符改用`#`号,`#=`代替`.=`
+- [x] 字符串连接符改用`#`号,`#=`代替`.=`
     ```lua
     $s1 = 'string1';
     $s2 = 'string2';
     $s3 = $s1 # $s2;
     $s4 = 'str1' # 'str2';
+    ```
+- [x] `for`结构支持`foreach`,`while`语法
+    ```php
+    //example 1:
+    for($arr as $k => $v) {
+
+    }
+    //equivalent to
+    foreach($arr as $k => $v) {
+
+    }
+
+    //example 2:
+    for($v > 1) {
+    }
+    //equivalent to
+    while($v > 1) {
+
+    }
+
+    //example 3:
+    do {
+
+    }for($v > 1);
+    //equivalent to
+    do {
+
+    }while($v > 1);
     ```
 - [ ]  箭头函数可以使用`->`号并省略`fn`关键词
     ```php
@@ -141,33 +168,6 @@
     }
     var_dump($block); //output:2
     ```
-- [x] `for`结构支持`foreach`,`while`语法
-    ```php
-    //example 1:
-    for($arr as $k => $v) {
 
-    }
-    //equivalent to
-    foreach($arr as $k => $v) {
-
-    }
-
-    //example 2:
-    for($v > 1) {
-    }
-    //equivalent to
-    while($v > 1) {
-
-    }
-
-    //example 3:
-    do {
-
-    }for($v > 1);
-    //equivalent to
-    do {
-
-    }while($v > 1);
-    ```
 
 
