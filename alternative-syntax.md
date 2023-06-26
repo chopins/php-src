@@ -154,19 +154,17 @@
     ```
 - [ ]  增加块级局部变量，使用`var`声明
     ```php
-    $v = 1;
     if(true) {
         var $v = 2;
         var_dump($v); // output: 2;
     }
-    var_dump($v); //output: 1;
+    var_dump($v); //output: undefined;
 
-    $block = 2;
     foreach($arr as $k) {
         var $block = 1; 
         var_dump($block);//output:1
     }
-    var_dump($block); //output:2
+    var_dump($block); //output:undefined
     ```
 
 
