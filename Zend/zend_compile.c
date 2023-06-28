@@ -147,7 +147,7 @@ static zend_string *zend_build_runtime_definition_key(zend_string *name, uint32_
 
 static bool zend_get_unqualified_name(const zend_string *name, const char **result, size_t *result_len) /* {{{ */
 {
-	const char *ns_separator = zend_memrchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name));
+	const char *ns_separator = zend_memrchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR, ZSTR_LEN(name));
 	if (ns_separator != NULL) {
 		*result = ns_separator + 1;
 		*result_len = ZSTR_VAL(name) + ZSTR_LEN(name) - *result;
@@ -617,7 +617,7 @@ static int zend_add_const_name_literal(zend_string *name, bool unqualified) /* {
 	int ret = zend_add_literal_string(&name);
 
 	size_t ns_len = 0, after_ns_len = ZSTR_LEN(name);
-	const char *after_ns = zend_memrchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name));
+	const char *after_ns = zend_memrchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR, ZSTR_LEN(name));
 	if (after_ns) {
 		after_ns += 1;
 		ns_len = after_ns - ZSTR_VAL(name) - 1;
@@ -964,7 +964,7 @@ ZEND_API zend_string *zend_create_member_string(zend_string *class_name, zend_st
 }
 
 static zend_string *zend_concat_names(char *name1, size_t name1_len, char *name2, size_t name2_len) {
-	return zend_string_concat3(name1, name1_len, "\\", 1, name2, name2_len);
+	return zend_string_concat3(name1, name1_len, ".", 1, name2, name2_len);
 }
 
 static zend_string *zend_prefix_with_ns(zend_string *name) {
@@ -983,7 +983,7 @@ static zend_string *zend_resolve_non_class_name(
 	char *compound;
 	*is_fully_qualified = 0;
 
-	if (ZSTR_VAL(name)[0] == '\\') {
+	if (ZSTR_VAL(name)[0] == ZEND_NS_SEPARATOR) {
 		/* Remove \ prefix (only relevant if this is a string rather than a label) */
 		*is_fully_qualified = 1;
 		return zend_string_init(ZSTR_VAL(name) + 1, ZSTR_LEN(name) - 1, 0);
@@ -1014,7 +1014,7 @@ static zend_string *zend_resolve_non_class_name(
 		}
 	}
 
-	compound = memchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name));
+	compound = memchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR, ZSTR_LEN(name));
 	if (compound) {
 		*is_fully_qualified = 1;
 	}
@@ -1068,7 +1068,7 @@ static zend_string *zend_resolve_class_name(zend_string *name, uint32_t type) /*
 	}
 
 	if (type == ZEND_NAME_FQ) {
-		if (ZSTR_VAL(name)[0] == '\\') {
+		if (ZSTR_VAL(name)[0] == ZEND_NS_SEPARATOR) {
 			/* Remove \ prefix (only relevant if this is a string rather than a label) */
 			name = zend_string_init(ZSTR_VAL(name) + 1, ZSTR_LEN(name) - 1, 0);
 			if (ZEND_FETCH_CLASS_DEFAULT != zend_get_class_fetch_type(name)) {
@@ -1082,7 +1082,7 @@ static zend_string *zend_resolve_class_name(zend_string *name, uint32_t type) /*
 	}
 
 	if (FC(imports)) {
-		compound = memchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name));
+		compound = memchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR, ZSTR_LEN(name));
 		if (compound) {
 			/* If the first part of a qualified name is an alias, substitute it. */
 			size_t len = compound - ZSTR_VAL(name);
@@ -3999,7 +3999,7 @@ static zend_result zend_compile_func_defined(znode *result, zend_ast_list *args)
 	}
 
 	name = zval_get_string(zend_ast_get_zval(args->child[0]));
-	if (zend_memrchr(ZSTR_VAL(name), '\\', ZSTR_LEN(name)) || zend_memrchr(ZSTR_VAL(name), ':', ZSTR_LEN(name))) {
+	if (zend_memrchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR, ZSTR_LEN(name)) || zend_memrchr(ZSTR_VAL(name), ':', ZSTR_LEN(name))) {
 		zend_string_release_ex(name, 0);
 		return FAILURE;
 	}
@@ -8316,7 +8316,7 @@ static void zend_compile_use(zend_ast *ast) /* {{{ */
 		if (current_ns) {
 			zend_string *ns_name = zend_string_alloc(ZSTR_LEN(current_ns) + 1 + ZSTR_LEN(new_name), 0);
 			zend_str_tolower_copy(ZSTR_VAL(ns_name), ZSTR_VAL(current_ns), ZSTR_LEN(current_ns));
-			ZSTR_VAL(ns_name)[ZSTR_LEN(current_ns)] = '\\';
+			ZSTR_VAL(ns_name)[ZSTR_LEN(current_ns)] = ZEND_NS_SEPARATOR;
 			memcpy(ZSTR_VAL(ns_name) + ZSTR_LEN(current_ns) + 1, ZSTR_VAL(lookup_name), ZSTR_LEN(lookup_name) + 1);
 
 			if (zend_have_seen_symbol(ns_name, type)) {

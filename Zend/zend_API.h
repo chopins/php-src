@@ -62,7 +62,8 @@ typedef struct _zend_fcall_info_cache {
 	zend_object *closure; /* Closure reference, only if the callable *is* the object */
 } zend_fcall_info_cache;
 
-#define ZEND_NS_NAME(ns, name)			ns "\\" name
+#define ZEND_NS_SEPARATOR	'.'
+#define ZEND_NS_NAME(ns, name)			ns "." name
 
 /* ZEND_FN/ZEND_MN are inlined below to prevent pre-scan macro expansion,
  * which causes issues if the function name is also a macro name. */

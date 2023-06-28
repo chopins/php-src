@@ -4695,7 +4695,7 @@ static zend_never_inline zend_execute_data *zend_init_dynamic_call_string(zend_s
 			init_func_run_time_cache(&fbc->op_array);
 		}
 	} else {
-		if (ZSTR_VAL(function)[0] == '\\') {
+		if (ZSTR_VAL(function)[0] == ZEND_NS_SEPARATOR) {
 			lcname = zend_string_alloc(ZSTR_LEN(function) - 1, 0);
 			zend_str_tolower_copy(ZSTR_VAL(lcname), ZSTR_VAL(function) + 1, ZSTR_LEN(function) - 1);
 		} else {

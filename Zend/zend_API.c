@@ -3308,7 +3308,7 @@ ZEND_API zend_result zend_register_class_alias_ex(const char *name, size_t name_
 		persistent = 0;
 	}
 
-	if (name[0] == '\\') {
+	if (name[0] == ZEND_NS_SEPARATOR) {
 		lcname = zend_string_alloc(name_len-1, persistent);
 		zend_str_tolower_copy(ZSTR_VAL(lcname), name+1, name_len-1);
 	} else {
@@ -3606,7 +3606,7 @@ static zend_always_inline bool zend_is_callable_check_func(zval *callable, zend_
 
 		/* Check if function with given name exists.
 		 * This may be a compound name that includes namespace name */
-		if (UNEXPECTED(Z_STRVAL_P(callable)[0] == '\\')) {
+		if (UNEXPECTED(Z_STRVAL_P(callable)[0] == ZEND_NS_SEPARATOR)) {
 			/* Skip leading \ */
 			ZSTR_ALLOCA_ALLOC(lmname, Z_STRLEN_P(callable) - 1, use_heap);
 			zend_str_tolower_copy(ZSTR_VAL(lmname), Z_STRVAL_P(callable) + 1, Z_STRLEN_P(callable) - 1);

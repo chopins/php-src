@@ -381,7 +381,7 @@ ZEND_API zval *zend_get_constant_ex(zend_string *cname, zend_class_entry *scope,
 	size_t name_len = ZSTR_LEN(cname);
 
 	/* Skip leading \\ */
-	if (name[0] == '\\') {
+	if (name[0] == ZEND_NS_SEPARATOR) {
 		name += 1;
 		name_len -= 1;
 		cname = NULL;
@@ -473,7 +473,7 @@ failure:
 	}
 
 	/* non-class constant */
-	if ((colon = zend_memrchr(name, '\\', name_len)) != NULL) {
+	if ((colon = zend_memrchr(name, ZEND_NS_SEPARATOR, name_len)) != NULL) {
 		/* compound constant name */
 		int prefix_len = colon - name;
 		size_t const_name_len = name_len - prefix_len - 1;
@@ -487,7 +487,7 @@ failure:
 		lcname = do_alloca(lcname_len + 1, use_heap);
 		zend_str_tolower_copy(lcname, name, prefix_len);
 
-		lcname[prefix_len] = '\\';
+		lcname[prefix_len] = ZEND_NS_SEPARATOR;
 		memcpy(lcname + prefix_len + 1, constant_name, const_name_len + 1);
 
 		c = zend_hash_str_find_ptr(EG(zend_constants), lcname, lcname_len);
@@ -543,7 +543,7 @@ ZEND_API zend_result zend_register_constant(zend_string *name, zend_constant *c)
 	printf("Registering constant for module %d\n", c->module_number);
 #endif
 
-	const char *slash = strrchr(ZSTR_VAL(name), '\\');
+	const char *slash = strrchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR);
 	if (slash) {
 		lowercase_name = zend_string_init(ZSTR_VAL(name), ZSTR_LEN(name), persistent);
 		zend_str_tolower(ZSTR_VAL(lowercase_name), slash - ZSTR_VAL(name));

@@ -983,7 +983,7 @@ static inline void class_exists_impl(INTERNAL_FUNCTION_PARAMETERS, int flags, in
 	}
 
 	if (!autoload) {
-		if (ZSTR_VAL(name)[0] == '\\') {
+		if (ZSTR_VAL(name)[0] == ZEND_NS_SEPARATOR) {
 			/* Ignore leading "\" */
 			lcname = zend_string_alloc(ZSTR_LEN(name) - 1, 0);
 			zend_str_tolower_copy(ZSTR_VAL(lcname), ZSTR_VAL(name) + 1, ZSTR_LEN(name) - 1);
@@ -1042,7 +1042,7 @@ ZEND_FUNCTION(function_exists)
 		Z_PARAM_STR(name)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (ZSTR_VAL(name)[0] == '\\') {
+	if (ZSTR_VAL(name)[0] == ZEND_NS_SEPARATOR) {
 		/* Ignore leading "\" */
 		lcname = zend_string_alloc(ZSTR_LEN(name) - 1, 0);
 		zend_str_tolower_copy(ZSTR_VAL(lcname), ZSTR_VAL(name) + 1, ZSTR_LEN(name) - 1);
