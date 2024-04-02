@@ -31,22 +31,36 @@ simplified write and reuse keyword 简化书写，复用关键字。
     class ClassName + ParentClass : Interface1,Interface2 {}
     ```
 
-- [x] class member modifier can be use `any`,`kin`,`own` instead of `public`、`protected`、`private`.类成员修饰符`public`、`protected`、`private`,依次更改为为`any`、`kin`、`own`
+- [x] class member modifier can be use `pub`,`ext`,`my` instead of `public`、`protected`、`private`.类成员修饰符`public`、`protected`、`private`,依次更改为为`pub`、`ext`、`my`
     ```php
     class ClassName {
-        any $publicProperty;
-        kin $protectedProperty;
-        own $privateProperty;
-        any function publicMethod() {}
-        kin function protectMethod() {}
-        own function privateMethod() {}
+        pub $publicProperty;
+        ext $protectedProperty;
+        my $privateProperty;
+        pub function publicMethod() {}
+        ext function protectMethod() {}
+        my function privateMethod() {}
     }
     ```
+- [x] use `$my` instead of `$this` object, use `my` instead of `self` class
+  ```php
+  class foo {
+    public static function a() {
+
+    }
+    public function b() {
+        my::a();
+    }
+    public function c() {
+        $my->b();
+    }
+  }
+  ```
 - [x] class method declaration can be omit `function.`类方法申明可省略`function`关键字
     ```php
     class ClassName {
         public publicMethod1() {}
-        any publicMethod2() {}
+        pub publicMethod2() {}
     }
     ```
 - [x] must be declaree magic method can be omit method modifiers, `function` and prefix underline. 必须定义为`public`的魔术方法可使用简略申明，省略修饰符与`function`关键字
@@ -73,12 +87,12 @@ simplified write and reuse keyword 简化书写，复用关键字。
 - [x] object opreater use dot`.` instead of `->` 对象操作符改用句点号`.`
     ```php
     class ClassName {
-        any int $property;
-        any method() {
+        pub int $property;
+        pub method() {
             $this.$property = 0;
             $this.protectedMethod();
         }
-        kin protectedMethod() {
+        ext protectedMethod() {
 
         }
     }
