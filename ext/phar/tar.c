@@ -19,7 +19,7 @@
 
 #include "phar_internal.h"
 
-static uint32_t phar_tar_number(char *buf, size_t len) /* {{{ */
+static uint32_t phar_tar_number(const char *buf, size_t len) /* {{{ */
 {
 	uint32_t num = 0;
 	size_t i = 0;
@@ -146,7 +146,6 @@ int phar_open_or_create_tar(char *fname, size_t fname_len, char *alias, size_t a
 	if (phar->is_brandnew) {
 		phar->is_tar = 1;
 		phar->is_zip = 0;
-		phar->internal_file_start = 0;
 		return SUCCESS;
 	}
 
@@ -199,13 +198,6 @@ static int phar_tar_process_metadata(phar_entry_info *entry, php_stream *fp) /* 
 	return SUCCESS;
 }
 /* }}} */
-
-#ifndef HAVE_STRNLEN
-static size_t strnlen(const char *s, size_t maxlen) {
-	char *r = (char *)memchr(s, '\0', maxlen);
-	return r ? r-s : maxlen;
-}
-#endif
 
 int phar_parse_tarfile(php_stream* fp, char *fname, size_t fname_len, char *alias, size_t alias_len, phar_archive_data** pphar, int is_data, uint32_t compression, char **error) /* {{{ */
 {
@@ -286,7 +278,7 @@ int phar_parse_tarfile(php_stream* fp, char *fname, size_t fname_len, char *alia
 			goto next;
 		}
 
-		if (((!old && hdr->prefix[0] == 0) || old) && strnlen(hdr->name, 100) == sizeof(".phar/signature.bin")-1 && !strncmp(hdr->name, ".phar/signature.bin", sizeof(".phar/signature.bin")-1)) {
+		if (((!old && hdr->prefix[0] == 0) || old) && zend_strnlen(hdr->name, 100) == sizeof(".phar/signature.bin")-1 && !strncmp(hdr->name, ".phar/signature.bin", sizeof(".phar/signature.bin")-1)) {
 			zend_off_t curloc;
 			size_t sig_len;
 
@@ -499,7 +491,7 @@ bail:
 		entry.link = NULL;
 		/* link field is null-terminated unless it has 100 non-null chars.
 		 * Thus we cannot use strlen. */
-		linkname_len = strnlen(hdr->linkname, 100);
+		linkname_len = zend_strnlen(hdr->linkname, 100);
 		if (entry.tar_type == TAR_LINK) {
 			if (!zend_hash_str_exists(&myphar->manifest, hdr->linkname, linkname_len)) {
 				if (error) {

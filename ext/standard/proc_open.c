@@ -36,6 +36,18 @@
 #include <fcntl.h>
 #endif
 
+#ifdef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP
+/* Only defined on glibc >= 2.29, FreeBSD CURRENT, musl >= 1.1.24,
+ * MacOS Catalina or later..
+ * It should be posible to modify this so it is also
+ * used in older systems when $cwd == NULL but care must be taken
+ * as at least glibc < 2.24 has a legacy implementation known
+ * to be really buggy.
+ */
+#include <spawn.h>
+#define USE_POSIX_SPAWN
+#endif
+
 /* This symbol is defined in ext/standard/config.m4.
  * Essentially, it is set if you HAVE_FORK || PHP_WIN32
  * Other platforms may modify that configure check and add suitable #ifdefs
@@ -191,13 +203,11 @@ static php_process_env _php_array_to_envp(zval *environment)
 #endif
 
 		if (key) {
-			memcpy(p, ZSTR_VAL(key), ZSTR_LEN(key));
-			p += ZSTR_LEN(key);
+			p = zend_mempcpy(p, ZSTR_VAL(key), ZSTR_LEN(key));
 			*p++ = '=';
 		}
 
-		memcpy(p, ZSTR_VAL(str), ZSTR_LEN(str));
-		p += ZSTR_LEN(str);
+		p = zend_mempcpy(p, ZSTR_VAL(str), ZSTR_LEN(str));
 		*p++ = '\0';
 		zend_string_release_ex(str, 0);
 	} ZEND_HASH_FOREACH_END();
@@ -526,11 +536,32 @@ static void append_backslashes(smart_str *str, size_t num_bs)
 	}
 }
 
-/* See https://docs.microsoft.com/en-us/cpp/cpp/parsing-cpp-command-line-arguments */
-static void append_win_escaped_arg(smart_str *str, zend_string *arg)
+const char *special_chars = "()!^\"<>&|%";
+
+static bool is_special_character_present(const zend_string *arg)
+{
+	for (size_t i = 0; i < ZSTR_LEN(arg); ++i) {
+		if (strchr(special_chars, ZSTR_VAL(arg)[i]) != NULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/* See https://docs.microsoft.com/en-us/cpp/cpp/parsing-cpp-command-line-arguments and 
+ * https://learn.microsoft.com/en-us/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way */
+static void append_win_escaped_arg(smart_str *str, zend_string *arg, bool is_cmd_argument)
 {
 	size_t num_bs = 0;
+	bool has_special_character = false;
 
+	if (is_cmd_argument) {
+		has_special_character = is_special_character_present(arg);
+		if (has_special_character) {
+			/* Escape double quote with ^ if executed by cmd.exe. */
+			smart_str_appendc(str, '^');
+		}
+	}
 	smart_str_appendc(str, '"');
 	for (size_t i = 0; i < ZSTR_LEN(arg); ++i) {
 		char c = ZSTR_VAL(arg)[i];
@@ -544,18 +575,71 @@ static void append_win_escaped_arg(smart_str *str, zend_string *arg)
 			num_bs = num_bs * 2 + 1;
 		}
 		append_backslashes(str, num_bs);
+		if (has_special_character && strchr(special_chars, c) != NULL) {
+			/* Escape special chars with ^ if executed by cmd.exe. */
+			smart_str_appendc(str, '^');
+		}
 		smart_str_appendc(str, c);
 		num_bs = 0;
 	}
 	append_backslashes(str, num_bs * 2);
+	if (has_special_character) {
+		/* Escape double quote with ^ if executed by cmd.exe. */
+		smart_str_appendc(str, '^');
+	}
 	smart_str_appendc(str, '"');
+}
+
+static inline int stricmp_end(const char* suffix, const char* str) {
+    size_t suffix_len = strlen(suffix);
+    size_t str_len = strlen(str);
+
+    if (suffix_len > str_len) {
+        return -1; /* Suffix is longer than string, cannot match. */
+    }
+
+    /* Compare the end of the string with the suffix, ignoring case. */
+    return _stricmp(str + (str_len - suffix_len), suffix);
+}
+
+static bool is_executed_by_cmd(const char *prog_name)
+{
+	/* If program name is cmd.exe, then return true. */
+	if (_stricmp("cmd.exe", prog_name) == 0 || _stricmp("cmd", prog_name) == 0
+			|| stricmp_end("\\cmd.exe", prog_name) == 0 || stricmp_end("\\cmd", prog_name) == 0) {
+		return true;
+	}
+
+    /* Find the last occurrence of the directory separator (backslash or forward slash). */
+    char *last_separator = strrchr(prog_name, '\\');
+    char *last_separator_fwd = strrchr(prog_name, '/');
+    if (last_separator_fwd && (!last_separator || last_separator < last_separator_fwd)) {
+        last_separator = last_separator_fwd;
+    }
+
+    /* Find the last dot in the filename after the last directory separator. */
+    char *extension = NULL;
+    if (last_separator != NULL) {
+        extension = strrchr(last_separator, '.');
+    } else {
+        extension = strrchr(prog_name, '.');
+    }
+
+    if (extension == NULL || extension == prog_name) {
+        /* No file extension found, it is not batch file. */
+        return false;
+    }
+
+    /* Check if the file extension is ".bat" or ".cmd" which is always executed by cmd.exe. */
+    return _stricmp(extension, ".bat") == 0 || _stricmp(extension, ".cmd") == 0;
 }
 
 static zend_string *create_win_command_from_args(HashTable *args)
 {
 	smart_str str = {0};
 	zval *arg_zv;
-	bool is_prog_name = 1;
+	bool is_prog_name = true;
+	bool is_cmd_execution = false;
 	int elem_num = 0;
 
 	ZEND_HASH_FOREACH_VAL(args, arg_zv) {
@@ -565,11 +649,13 @@ static zend_string *create_win_command_from_args(HashTable *args)
 			return NULL;
 		}
 
-		if (!is_prog_name) {
+		if (is_prog_name) {
+			is_cmd_execution = is_executed_by_cmd(ZSTR_VAL(arg_str));
+		} else {
 			smart_str_appendc(&str, ' ');
 		}
 
-		append_win_escaped_arg(&str, arg_str);
+		append_win_escaped_arg(&str, arg_str, !is_prog_name && is_cmd_execution);
 
 		is_prog_name = 0;
 		zend_string_release(arg_str);
@@ -680,7 +766,7 @@ static zend_string* get_command_from_array(HashTable *array, char ***argv, int n
 static descriptorspec_item* alloc_descriptor_array(HashTable *descriptorspec)
 {
 	uint32_t ndescriptors = zend_hash_num_elements(descriptorspec);
-	return ecalloc(sizeof(descriptorspec_item), ndescriptors);
+	return ecalloc(ndescriptors, sizeof(descriptorspec_item));
 }
 
 static zend_string* get_string_parameter(zval *array, int index, char *param_name)
@@ -982,6 +1068,36 @@ static zend_result set_proc_descriptor_from_resource(zval *resource, descriptors
 }
 
 #ifndef PHP_WIN32
+#if defined(USE_POSIX_SPAWN)
+static zend_result close_parentends_of_pipes(posix_spawn_file_actions_t * actions, descriptorspec_item *descriptors, int ndesc)
+{
+	int r;
+	for (int i = 0; i < ndesc; i++) {
+		if (descriptors[i].type != DESCRIPTOR_TYPE_STD) {
+			r = posix_spawn_file_actions_addclose(actions, descriptors[i].parentend);
+			if (r != 0) {
+				php_error_docref(NULL, E_WARNING, "Cannot close file descriptor %d: %s", descriptors[i].parentend, strerror(r));
+				return FAILURE;
+			}
+		}
+		if (descriptors[i].childend != descriptors[i].index) {
+			r = posix_spawn_file_actions_adddup2(actions, descriptors[i].childend, descriptors[i].index);
+			if (r != 0) {
+				php_error_docref(NULL, E_WARNING, "Unable to copy file descriptor %d (for pipe) into "
+						"file descriptor %d: %s", descriptors[i].childend, descriptors[i].index, strerror(r));
+				return FAILURE;
+			}
+			r = posix_spawn_file_actions_addclose(actions, descriptors[i].childend);
+			if (r != 0) {
+				php_error_docref(NULL, E_WARNING, "Cannot close file descriptor %d: %s", descriptors[i].childend, strerror(r));
+				return FAILURE;
+			}
+		}
+	}
+
+	return SUCCESS;
+}
+#else
 static zend_result close_parentends_of_pipes(descriptorspec_item *descriptors, int ndesc)
 {
 	/* We are running in child process
@@ -1004,6 +1120,7 @@ static zend_result close_parentends_of_pipes(descriptorspec_item *descriptors, i
 
 	return SUCCESS;
 }
+#endif
 #endif
 
 static void close_all_descriptors(descriptorspec_item *descriptors, int ndesc)
@@ -1130,6 +1247,7 @@ PHP_FUNCTION(proc_open)
 
 		descriptors[ndesc].index = (int)nindex;
 
+		ZVAL_DEREF(descitem);
 		if (Z_TYPE_P(descitem) == IS_RESOURCE) {
 			if (set_proc_descriptor_from_resource(descitem, &descriptors[ndesc], ndesc) == FAILURE) {
 				goto exit_fail;
@@ -1216,6 +1334,37 @@ PHP_FUNCTION(proc_open)
 	childHandle = pi.hProcess;
 	child       = pi.dwProcessId;
 	CloseHandle(pi.hThread);
+#elif defined(USE_POSIX_SPAWN)
+	posix_spawn_file_actions_t factions;
+	int r;
+	posix_spawn_file_actions_init(&factions);
+
+	if (close_parentends_of_pipes(&factions, descriptors, ndesc) == FAILURE) {
+		posix_spawn_file_actions_destroy(&factions);
+		close_all_descriptors(descriptors, ndesc);
+		goto exit_fail;
+	}
+
+	if (cwd) {
+		r = posix_spawn_file_actions_addchdir_np(&factions, cwd);
+		if (r != 0) {
+			php_error_docref(NULL, E_WARNING, "posix_spawn_file_actions_addchdir_np() failed: %s", strerror(r));
+		}
+	}
+
+	if (argv) {
+		r = posix_spawnp(&child, ZSTR_VAL(command_str), &factions, NULL, argv, (env.envarray ? env.envarray : environ));
+	} else {
+		r = posix_spawn(&child, "/bin/sh" , &factions, NULL,
+				(char * const[]) {"sh", "-c", ZSTR_VAL(command_str), NULL},
+				env.envarray ? env.envarray : environ);
+	}
+	posix_spawn_file_actions_destroy(&factions);
+	if (r != 0) {
+		close_all_descriptors(descriptors, ndesc);
+		php_error_docref(NULL, E_WARNING, "posix_spawn() failed: %s", strerror(r));
+		goto exit_fail;
+	}
 #elif HAVE_FORK
 	/* the Unix way */
 	child = fork();

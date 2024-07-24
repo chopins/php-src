@@ -72,6 +72,8 @@ static zend_always_inline bool instanceof_function(
 	return instance_ce == ce || instanceof_function_slow(instance_ce, ce);
 }
 
+ZEND_API bool zend_string_only_has_ascii_alphanumeric(const zend_string *str);
+
 /**
  * Checks whether the string "str" with length "length" is numeric. The value
  * of allow_errors determines whether it's required to be entirely numeric, or
@@ -262,6 +264,25 @@ zend_memnrstr(const char *haystack, const char *needle, size_t needle_len, const
 	}
 }
 
+static zend_always_inline size_t zend_strnlen(const char* s, size_t maxlen)
+{
+#if defined(HAVE_STRNLEN)
+	return strnlen(s, maxlen);
+#else
+	const char *p = (const char *)memchr(s, '\0', maxlen);
+	return p ? p-s : maxlen;
+#endif
+}
+
+static zend_always_inline void *zend_mempcpy(void *dest, const void *src, size_t n)
+{
+#if defined(HAVE_MEMPCPY)
+	return mempcpy(dest, src, n);
+#else
+	return (char *)memcpy(dest, src, n) + n;
+#endif
+}
+
 ZEND_API zend_result ZEND_FASTCALL increment_function(zval *op1);
 ZEND_API zend_result ZEND_FASTCALL decrement_function(zval *op2);
 
@@ -275,6 +296,7 @@ ZEND_API void ZEND_FASTCALL convert_to_array(zval *op);
 ZEND_API void ZEND_FASTCALL convert_to_object(zval *op);
 
 ZEND_API zend_long    ZEND_FASTCALL zval_get_long_func(const zval *op, bool is_strict);
+ZEND_API zend_long    ZEND_FASTCALL zval_try_get_long(const zval *op, bool *failed);
 ZEND_API double       ZEND_FASTCALL zval_get_double_func(const zval *op);
 ZEND_API zend_string* ZEND_FASTCALL zval_get_string_func(zval *op);
 ZEND_API zend_string* ZEND_FASTCALL zval_try_get_string_func(zval *op);
@@ -924,7 +946,7 @@ zend_memnistr(const char *haystack, const char *needle, size_t needle_len, const
 	const char *p_upper = NULL;
 	if (first_lower != first_upper) {
 		// If the needle length is 1 we don't need to look beyond p_lower as it is a guaranteed match
-		size_t upper_search_length = end - (needle_len == 1 && p_lower != NULL ? p_lower : haystack);
+		size_t upper_search_length = needle_len == 1 && p_lower != NULL ? p_lower - haystack : end - haystack;
 		p_upper = (const char *)memchr(haystack, first_upper, upper_search_length);
 	}
 	const char *p = !p_upper || (p_lower && p_lower < p_upper) ? p_lower : p_upper;

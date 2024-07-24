@@ -20,11 +20,29 @@ namespace {
     interface _ZendTestInterface
     {
         /** @var int */
+        /** @genstubs-expose-comment-block
+         * "Lorem ipsum"
+         * @see https://www.php.net
+         * @since 8.2
+         */
         public const DUMMY = 0;
     }
 
     /** @alias _ZendTestClassAlias */
     class _ZendTestClass implements _ZendTestInterface {
+        public const mixed TYPED_CLASS_CONST1 = [];
+        public const int|array TYPED_CLASS_CONST2 = 42;
+        /**
+         * @var int
+         * @cvalue 1
+         */
+        public const int|string TYPED_CLASS_CONST3 = UNKNOWN;
+
+        /**
+         * @deprecated
+         */
+        public const int ZEND_TEST_DEPRECATED = 42;
+
         /** @var mixed */
         public static $_StaticProp;
         public static int $staticIntProp = 123;
@@ -45,6 +63,13 @@ namespace {
         public function returnsThrowable(): Throwable {}
 
         static public function variadicTest(string|Iterator ...$elements) : static {}
+
+        public function takesUnionType(stdclass|Iterator $arg): void {}
+    }
+
+    class _ZendTestMagicCall
+    {
+        public function __call(string $name, array $args): mixed {}
     }
 
     class _ZendTestChildClass extends _ZendTestClass
@@ -52,16 +77,35 @@ namespace {
         public function returnsThrowable(): Exception {}
     }
 
+    class ZendAttributeTest {
+        /** @var int */
+        #[ZendTestRepeatableAttribute]
+        #[ZendTestRepeatableAttribute]
+        public const TEST_CONST = 1;
+
+        /** @var mixed */
+        #[ZendTestRepeatableAttribute]
+        #[ZendTestPropertyAttribute("testProp")]
+        public $testProp;
+
+        #[ZendTestAttribute]
+        public function testMethod(): bool {}
+    }
+
     trait _ZendTestTrait {
         /** @var mixed */
         public $testProp;
+        public Traversable|Countable $classUnionProp;
 
         public function testMethod(): bool {}
     }
 
     #[Attribute(Attribute::TARGET_ALL)]
     final class ZendTestAttribute {
+    }
 
+    #[Attribute(Attribute::TARGET_ALL|Attribute::IS_REPEATABLE)]
+    final class ZendTestRepeatableAttribute {
     }
 
     #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -71,8 +115,18 @@ namespace {
         public function __construct(string $parameter) {}
     }
 
+    /** @genstubs-expose-comment-block
+     * "Lorem ipsum"
+     * @see https://www.php.net
+     * @since 8.1
+     */
     #[Attribute(Attribute::TARGET_PROPERTY)]
     final class ZendTestPropertyAttribute {
+        /** @genstubs-expose-comment-block
+         * "Lorem ipsum"
+         * @see https://www.php.net
+         * @since 8.4
+         */
         public string $parameter;
 
         public function __construct(string $parameter) {}
@@ -96,6 +150,12 @@ namespace {
         ): int {}
     }
 
+    class ZendTestClassWithPropertyAttribute {
+        // this attribute must be added internally in MINIT
+        #[ZendTestAttribute]
+        public string $attributed;
+    }
+
     final class ZendTestForbidDynamicCall {
         public function call(): void {}
         public static function callStatic(): void {}
@@ -108,7 +168,7 @@ namespace {
 
     enum ZendTestStringEnum: string {
         case Foo = "Test1";
-        case Bar = "Test2";
+        case Bar = 'Test2';
         case Baz = "Test2\\a";
         case FortyTwo = "42";
     }
@@ -119,13 +179,17 @@ namespace {
         case Baz = -1;
     }
 
-    final class DoOperationNoCast {
-        private int $val;
-        public function __construct(int $val) {}
-    }
-
     function zend_test_array_return(): array {}
 
+    /** @genstubs-expose-comment-block
+     * "Lorem ipsum"
+     * @see https://www.php.net
+     * @since 8.3
+     */
+     /**
+     * @internal
+     * @compile-time-eval
+     */
     function zend_test_nullable_array_return(): null|array {}
 
     function zend_test_void_return(): void {}
@@ -162,6 +226,10 @@ namespace {
     /** @param stdClass|string|null $param */
     function zend_string_or_stdclass_or_null($param): stdClass|string|null {}
 
+    function zend_number_or_string(string|int|float $param): string|int|float {}
+
+    function zend_number_or_string_or_null(string|int|float|null $param): string|int|float|null {}
+
     function zend_iterable(iterable $arg1, ?iterable $arg2 = null): void {}
 
     function zend_weakmap_attach(object $object, mixed $value): bool {}
@@ -196,6 +264,21 @@ namespace {
     function zend_test_crash(?string $message = null): void {}
 
     function zend_test_fill_packed_array(array &$array): void {}
+
+    /** @return resource */
+    function zend_test_create_throwing_resource() {}
+
+    function get_open_basedir(): ?string {}
+
+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)
+function zend_test_override_libxml_global_state(): void {}
+#endif
+
+    function zend_test_is_pcre_bundled(): bool {}
+
+#if defined(PHP_WIN32)
+    function zend_test_set_fmode(bool $binary): void {}
+#endif
 }
 
 namespace ZendTestNS {
@@ -211,6 +294,11 @@ namespace ZendTestNS {
         public function method(): ?UnlikelyCompileError {}
     }
 
+    class NotUnlikelyCompileError {
+        /* This method signature would create a compile error due to the string
+         * "ZendTestNS\NotUnlikelyCompileError" in the generated macro call */
+        public function method(): ?NotUnlikelyCompileError {}
+    }
 }
 
 namespace ZendTestNS2 {

@@ -26,6 +26,7 @@
 #include "zend_shared_alloc.h"
 #include "zend_operators.h"
 #include "zend_attributes.h"
+#include "zend_constants.h"
 
 #define ADD_DUP_SIZE(m,s)  ZCG(current_persistent_script)->size += zend_shared_memdup_size((void*)m, s)
 #define ADD_SIZE(m)        ZCG(current_persistent_script)->size += ZEND_ALIGNED_SIZE(m)
@@ -87,7 +88,7 @@ static void zend_persist_ast_calc(zend_ast *ast)
 		}
 	} else {
 		uint32_t children = zend_ast_get_num_children(ast);
-		ADD_SIZE(sizeof(zend_ast) - sizeof(zend_ast *) + sizeof(zend_ast *) * children);
+		ADD_SIZE(zend_ast_size(children));
 		for (i = 0; i < children; i++) {
 			if (ast->child[i]) {
 				zend_persist_ast_calc(ast->child[i]);
@@ -386,6 +387,11 @@ static void zend_persist_class_constant_calc(zval *zv)
 	zend_class_constant *c = Z_PTR_P(zv);
 
 	if (!zend_shared_alloc_get_xlat_entry(c)) {
+		if (((c->ce->ce_flags & ZEND_ACC_IMMUTABLE) && !(Z_CONSTANT_FLAGS(c->value) & CONST_OWNED))
+		 || c->ce->type == ZEND_INTERNAL_CLASS) {
+			/* Class constant comes from a different file in shm or internal class, keep existing pointer. */
+			return;
+		}
 		if (!ZCG(current_persistent_script)->corrupted
 		 && zend_accel_in_shm(Z_PTR_P(zv))) {
 			return;
@@ -487,8 +493,8 @@ void zend_persist_class_entry_calc(zend_class_entry *ce)
 			ADD_STRING(ce->info.user.filename);
 		}
 
-		if (ZCG(accel_directives).save_comments && ce->info.user.doc_comment) {
-			ADD_STRING(ce->info.user.doc_comment);
+		if (ZCG(accel_directives).save_comments && ce->doc_comment) {
+			ADD_STRING(ce->doc_comment);
 		}
 
 		if (ce->attributes) {

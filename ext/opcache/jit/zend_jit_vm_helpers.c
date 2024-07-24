@@ -28,11 +28,6 @@
 #include "Optimizer/zend_func_info.h"
 #include "Optimizer/zend_call_graph.h"
 #include "zend_jit.h"
-#if ZEND_JIT_TARGET_X86
-# include "zend_jit_x86.h"
-#elif ZEND_JIT_TARGET_ARM64
-# include "zend_jit_arm64.h"
-#endif
 
 #include "zend_jit_internal.h"
 
@@ -199,6 +194,43 @@ bool ZEND_FASTCALL zend_jit_deprecated_helper(OPLINE_D)
 	return 1;
 }
 
+void ZEND_FASTCALL zend_jit_undefined_long_key(EXECUTE_DATA_D)
+{
+	const zend_op *opline = EX(opline);
+	zval *result = EX_VAR(opline->result.var);
+	zval *dim;
+
+	if (opline->op2_type == IS_CONST) {
+		dim = RT_CONSTANT(opline, opline->op2);
+	} else {
+		dim = EX_VAR(opline->op2.var);
+	}
+	ZEND_ASSERT(Z_TYPE_P(dim) == IS_LONG);
+	zend_error(E_WARNING, "Undefined array key " ZEND_LONG_FMT, Z_LVAL_P(dim));
+	ZVAL_NULL(result);
+}
+
+void ZEND_FASTCALL zend_jit_undefined_string_key(EXECUTE_DATA_D)
+{
+	const zend_op *opline = EX(opline);
+	zval *result = EX_VAR(opline->result.var);
+	zval *dim;
+	zend_ulong lval;
+
+	if (opline->op2_type == IS_CONST) {
+		dim = RT_CONSTANT(opline, opline->op2);
+	} else {
+		dim = EX_VAR(opline->op2.var);
+	}
+	ZEND_ASSERT(Z_TYPE_P(dim) == IS_STRING);
+	if (ZEND_HANDLE_NUMERIC(Z_STR_P(dim), lval)) {
+		zend_error(E_WARNING, "Undefined array key " ZEND_LONG_FMT, lval);
+	} else {
+		zend_error(E_WARNING, "Undefined array key \"%s\"", Z_STRVAL_P(dim));
+	}
+	ZVAL_NULL(result);
+}
+
 ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL zend_jit_profile_helper(ZEND_OPCODE_HANDLER_ARGS)
 {
 	zend_op_array *op_array = (zend_op_array*)EX(func);
@@ -282,7 +314,7 @@ static zend_always_inline zend_constant* _zend_quick_get_constant(
 
 	if (!check_defined_only) {
 		if (ZEND_CONSTANT_FLAGS(c) & CONST_DEPRECATED) {
-			zend_error(E_DEPRECATED, "Constant %s is deprecated", ZSTR_VAL(Z_STR_P(key)));
+			zend_error(E_DEPRECATED, "Constant %s is deprecated", ZSTR_VAL(c->name));
 			if (EG(exception)) {
 				return NULL;
 			}
@@ -606,6 +638,16 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data *ex, 
 		return ZEND_JIT_TRACE_STOP_EXCEPTION;
 	}
 
+	trace_flags = ZEND_OP_TRACE_INFO(opline, offset)->trace_flags;
+	if (trace_flags & ZEND_JIT_TRACE_UNSUPPORTED) {
+		TRACE_END(ZEND_JIT_TRACE_END, ZEND_JIT_TRACE_STOP_NOT_SUPPORTED, opline);
+#ifdef HAVE_GCC_GLOBAL_REGS
+		execute_data = save_execute_data;
+		opline = save_opline;
+#endif
+		return ZEND_JIT_TRACE_STOP_NOT_SUPPORTED;
+	}
+
 	if (prev_call) {
 		int ret = zend_jit_trace_record_fake_init_call(prev_call, trace_buffer, idx, is_megamorphic);
 		if (ret < 0) {
@@ -650,6 +692,12 @@ zend_jit_trace_stop ZEND_FASTCALL zend_jit_trace_execute(zend_execute_data *ex, 
 				}
 			}
 			op1_type |= flags;
+		} else if (opline->op1_type == IS_UNUSED && (op_array->fn_flags & ZEND_ACC_CLOSURE)) {
+			uint32_t op1_flags = ZEND_VM_OP1_FLAGS(zend_get_opcode_flags(opline->opcode));
+			if ((op1_flags & ZEND_VM_OP_MASK) == ZEND_VM_OP_THIS) {
+				op1_type = IS_OBJECT;
+				ce1 = Z_OBJCE(EX(This));
+			}
 		}
 		if (opline->op2_type & (IS_TMP_VAR|IS_VAR|IS_CV)
 		 && opline->opcode != ZEND_INSTANCEOF

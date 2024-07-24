@@ -438,10 +438,7 @@ really_get_entry:
 		(*ret)->position = 0;
 		(*ret)->fp = NULL;
 		(*ret)->phar = phar;
-		(*ret)->for_write = for_write;
 		(*ret)->internal_file = entry;
-		(*ret)->is_zip = entry->is_zip;
-		(*ret)->is_tar = entry->is_tar;
 
 		if (!phar->is_persistent) {
 			++(entry->phar->refcount);
@@ -486,10 +483,7 @@ really_get_entry:
 	*ret = (phar_entry_data *) emalloc(sizeof(phar_entry_data));
 	(*ret)->position = 0;
 	(*ret)->phar = phar;
-	(*ret)->for_write = for_write;
 	(*ret)->internal_file = entry;
-	(*ret)->is_zip = entry->is_zip;
-	(*ret)->is_tar = entry->is_tar;
 	(*ret)->fp = phar_get_efp(entry, 1);
 	if (entry->link) {
 		phar_entry_info *link = phar_get_link_source(entry);
@@ -616,9 +610,6 @@ phar_entry_data *phar_get_or_create_entry_data(char *fname, size_t fname_len, ch
 	ret->phar = phar;
 	ret->fp = entry->fp;
 	ret->position = ret->zero = 0;
-	ret->for_write = 1;
-	ret->is_zip = entry->is_zip;
-	ret->is_tar = entry->is_tar;
 	ret->internal_file = entry;
 
 	return ret;
@@ -1605,7 +1596,9 @@ int phar_verify_signature(php_stream *fp, size_t end_of_phar, uint32_t sig_type,
 			php_stream_seek(fp, 0, SEEK_SET);
 
 			while (read_size && (len = php_stream_read(fp, (char*)buf, read_size)) > 0) {
-				EVP_VerifyUpdate (md_ctx, buf, len);
+				if (UNEXPECTED(EVP_VerifyUpdate (md_ctx, buf, len) == 0)) {
+					goto failure;
+				}
 				read_len -= (zend_off_t)len;
 
 				if (read_len < read_size) {
@@ -1614,6 +1607,7 @@ int phar_verify_signature(php_stream *fp, size_t end_of_phar, uint32_t sig_type,
 			}
 
 			if (EVP_VerifyFinal(md_ctx, (unsigned char *)sig, sig_len, key) != 1) {
+				failure:
 				/* 1: signature verified, 0: signature does not match, -1: failed signature operation */
 				EVP_PKEY_free(key);
 				EVP_MD_CTX_destroy(md_ctx);
@@ -1887,6 +1881,13 @@ int phar_create_signature(phar_archive_data *phar, php_stream *fp, char **signat
 			}
 
 			md_ctx = EVP_MD_CTX_create();
+			if (md_ctx == NULL) {
+				EVP_PKEY_free(key);
+				if (error) {
+					spprintf(error, 0, "unable to initialize openssl signature for phar \"%s\"", phar->fname);
+				}
+				return FAILURE;
+			}
 
 			siglen = EVP_PKEY_size(key);
 			sigbuf = emalloc(siglen + 1);

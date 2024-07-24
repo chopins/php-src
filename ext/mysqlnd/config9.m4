@@ -6,8 +6,17 @@ PHP_ARG_ENABLE([mysqlnd],
   [no],
   [yes])
 
-PHP_ARG_ENABLE([mysqlnd_compression_support],
-  [whether to disable compressed protocol support in mysqlnd],
+PHP_ARG_WITH([mysqlnd-ssl],
+  [whether to explicitly enable SSL support in mysqlnd],
+  [AS_HELP_STRING([--with-mysqlnd-ssl],
+    [Explicitly enable SSL support in ext/mysqlnd when not building with
+    ext/openssl. If ext/openssl is enabled at the configure step, SSL is enabled
+    implicitly.])],
+  [no],
+  [no])
+
+PHP_ARG_ENABLE([mysqlnd-compression-support],
+  [whether to enable compressed protocol support in mysqlnd],
   [AS_HELP_STRING([--disable-mysqlnd-compression-support],
     [Disable support for the MySQL compressed protocol in mysqlnd])],
   [yes],
@@ -32,18 +41,15 @@ if test "$PHP_MYSQLND" != "no" || test "$PHP_MYSQLND_ENABLED" = "yes"; then
 
   AC_DEFINE([MYSQLND_SSL_SUPPORTED], 1, [Enable core mysqlnd SSL code])
 
+  dnl Empty variable means 'no' (for phpize builds).
   test -z "$PHP_OPENSSL" && PHP_OPENSSL=no
 
-  if test "$PHP_OPENSSL" != "no" || test "$PHP_OPENSSL_DIR" != "no"; then
+  if test "$PHP_OPENSSL" != "no" || test "$PHP_MYSQLND_SSL" != "no"; then
     PHP_SETUP_OPENSSL(MYSQLND_SHARED_LIBADD, [AC_DEFINE(MYSQLND_HAVE_SSL,1,[Enable mysqlnd code that uses OpenSSL directly])])
   fi
 
   mysqlnd_sources="$mysqlnd_base_sources $mysqlnd_ps_sources"
   PHP_NEW_EXTENSION(mysqlnd, $mysqlnd_sources, $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
-  PHP_ADD_BUILD_DIR([ext/mysqlnd], 1)
   PHP_INSTALL_HEADERS([ext/mysqlnd/])
-fi
-
-if test "$PHP_MYSQLND" != "no" || test "$PHP_MYSQLND_ENABLED" = "yes" || test "$PHP_MYSQLI" != "no"; then
-  PHP_ADD_BUILD_DIR([ext/mysqlnd], 1)
+  PHP_SUBST([MYSQLND_SHARED_LIBADD])
 fi

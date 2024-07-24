@@ -35,7 +35,9 @@ static zend_always_inline void _zend_object_std_init(zend_object *object, zend_c
 	object->properties = NULL;
 	zend_objects_store_put(object);
 	if (UNEXPECTED(ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
-		ZVAL_UNDEF(object->properties_table + object->ce->default_properties_count);
+		zval *guard_value = object->properties_table + object->ce->default_properties_count;
+		ZVAL_UNDEF(guard_value);
+		Z_GUARD_P(guard_value) = 0;
 	}
 }
 
@@ -47,6 +49,10 @@ ZEND_API void ZEND_FASTCALL zend_object_std_init(zend_object *object, zend_class
 ZEND_API void zend_object_std_dtor(zend_object *object)
 {
 	zval *p, *end;
+
+	if (UNEXPECTED(GC_FLAGS(object) & IS_OBJ_WEAKLY_REFERENCED)) {
+		zend_weakrefs_notify(object);
+	}
 
 	if (object->properties) {
 		if (EXPECTED(!(GC_FLAGS(object->properties) & IS_ARRAY_IMMUTABLE))) {
@@ -85,10 +91,6 @@ ZEND_API void zend_object_std_dtor(zend_object *object)
 			zend_hash_destroy(guards);
 			FREE_HASHTABLE(guards);
 		}
-	}
-
-	if (UNEXPECTED(GC_FLAGS(object) & IS_OBJ_WEAKLY_REFERENCED)) {
-		zend_weakrefs_notify(object);
 	}
 }
 

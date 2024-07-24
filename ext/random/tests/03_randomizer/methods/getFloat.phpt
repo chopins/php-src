@@ -21,6 +21,7 @@ $engines[] = new PcgOneseq128XslRr64();
 $engines[] = new Xoshiro256StarStar();
 $engines[] = new Secure();
 $engines[] = new TestShaEngine();
+$max = getenv("SKIP_SLOW_TESTS") ? 3_000.0 : 10_000.0;
 
 foreach ($engines as $engine) {
     echo $engine::class, PHP_EOL;
@@ -28,7 +29,7 @@ foreach ($engines as $engine) {
     $randomizer = new Randomizer($engine);
 
     // Basic range test.
-    for ($i = 0.0; $i < 10_000.0; $i += 1.2345) {
+    for ($i = 0.0; $i < $max; $i += 1.2345) {
         $result = $randomizer->getFloat(-$i, $i, IntervalBoundary::ClosedClosed);
 
         if ($result > $i || $result < -$i) {
@@ -40,7 +41,10 @@ foreach ($engines as $engine) {
 die('success');
 
 ?>
---EXPECT--
+--EXPECTF--
+Deprecated: Constant MT_RAND_PHP is deprecated in %s on line %d
+
+Deprecated: The MT_RAND_PHP variant of Mt19937 is deprecated in %s on line %d
 Random\Engine\Mt19937
 Random\Engine\Mt19937
 Random\Engine\PcgOneseq128XslRr64

@@ -68,8 +68,6 @@ if test "$PHP_EXTERNAL_LIBCRYPT" != "no"; then
 
   AC_CACHE_CHECK(for standard DES crypt, ac_cv_crypt_des,[
     AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -98,8 +96,6 @@ int main(void) {
 
   AC_CACHE_CHECK(for extended DES crypt, ac_cv_crypt_ext_des,[
     AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -128,8 +124,6 @@ int main(void) {
 
   AC_CACHE_CHECK(for MD5 crypt, ac_cv_crypt_md5,[
   AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -168,8 +162,6 @@ int main(void) {
 
   AC_CACHE_CHECK(for Blowfish crypt, ac_cv_crypt_blowfish,[
   AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -205,8 +197,6 @@ int main(void) {
 
   AC_CACHE_CHECK(for SHA512 crypt, ac_cv_crypt_sha512,[
   AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -241,8 +231,6 @@ int main(void) {
 
   AC_CACHE_CHECK(for SHA256 crypt, ac_cv_crypt_sha256,[
   AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <string.h>
-
 #if HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -285,22 +273,6 @@ else
   AC_DEFINE_UNQUOTED(PHP_USE_PHP_CRYPT_R, 1, [Whether PHP has to use its own crypt_r])
 
   PHP_ADD_SOURCES(PHP_EXT_DIR(standard), crypt_freesec.c crypt_blowfish.c crypt_sha512.c crypt_sha256.c php_crypt_r.c)
-fi
-
-dnl
-dnl Check for __attribute__ ((__aligned__)) support in the compiler
-dnl
-AC_CACHE_CHECK(whether the compiler supports aligned attribute, ac_cv_attribute_aligned,[
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-]],[[
-  unsigned char test[32] __attribute__ ((__aligned__ (__alignof__ (int))));
-]])],[
-  ac_cv_attribute_aligned=yes
-],[
-  ac_cv_attribute_aligned=no
-])])
-if test "$ac_cv_attribute_aligned" = "yes"; then
-  AC_DEFINE([HAVE_ATTRIBUTE_ALIGNED], 1, [whether the compiler supports __attribute__ ((__aligned__))])
 fi
 
 if test "$cross_compiling" = yes ; then
@@ -364,17 +336,19 @@ dnl Detect library functions needed by php dns_xxx functions
 dnl ext/standard/php_dns.h will collect these in a single define
 dnl HAVE_FULL_DNS_FUNCS
 dnl
-PHP_CHECK_FUNC(res_nsearch, resolv, bind, socket)
-PHP_CHECK_FUNC(res_ndestroy, resolv, bind, socket)
-PHP_CHECK_FUNC(dns_search, resolv, bind, socket)
-PHP_CHECK_FUNC(dn_expand, resolv, bind, socket)
-PHP_CHECK_FUNC(dn_skipname, resolv, bind, socket)
+PHP_CHECK_FUNC(res_nsearch, resolv, socket)
+PHP_CHECK_FUNC(res_ndestroy, resolv, socket)
+PHP_CHECK_FUNC(dns_search, resolv, socket)
+PHP_CHECK_FUNC(dn_expand, resolv, socket)
+PHP_CHECK_FUNC(dn_skipname, resolv, socket)
 
 dnl
 dnl These are old deprecated functions
 dnl
 
-PHP_CHECK_FUNC(res_search, resolv, bind, socket)
+PHP_CHECK_FUNC(res_search, resolv, socket)
+
+AC_CHECK_FUNCS([posix_spawn_file_actions_addchdir_np])
 
 dnl
 dnl Check for strptime()
@@ -415,15 +389,16 @@ if test "$PHP_PASSWORD_ARGON2" != "no"; then
 fi
 
 dnl
-dnl net_get_interfaces
+dnl Check net/if.h for net_get_interfaces. Darwin and BSD-like systems need
+dnl sys/socket.h to be included with net/if.h.
 dnl
 AC_CHECK_HEADERS([net/if.h],[], [],
 [
   #ifdef HAVE_SYS_SOCKET_H
   #include <sys/socket.h>
   #endif
-  #include <net/if.h>
 ])
+
 AC_MSG_CHECKING([for usable getifaddrs])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[
   #include <sys/types.h>

@@ -8,8 +8,7 @@ include "skipif.inc";
 if (!(str_contains(PHP_OS, 'Linux') || str_contains(PHP_OS, 'FreeBSD'))) {
     die('skip PDEATHSIG is only supported on Linux and FreeBSD');
 }
-// This fails on 32-bit GitHub actions (probably due to Docker rather than 32-bit)
-if (PHP_INT_SIZE != 8) die("skip 64-bit only");
+if (@file_exists('/.dockerenv')) die("skip Broken in Docker");
 ?>
 --FILE--
 <?php
@@ -38,7 +37,7 @@ if (count($workersBefore) === 0) {
 proc_terminate($cliServerInfo->processHandle, 9); // SIGKILL
 
 $try = 1;
-$max_tries = 5;
+$max_tries = 20;
 while (true) {
     $workersAfter = find_workers_by_pids($workersBefore);
     if (count($workersAfter) === 0) {

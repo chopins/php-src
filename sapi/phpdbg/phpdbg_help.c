@@ -98,14 +98,12 @@ static void pretty_print(const char *text)
 		} else if (UNEXPECTED(p[0] == '*') && p[1] == '*') {
 			if (bold_escape_len) {
 				in_bold = !in_bold;
-				memcpy (q, in_bold ? bold_on_escape : bold_off_escape, bold_escape_len);
-				q += bold_escape_len;
+				q = zend_mempcpy(q, in_bold ? bold_on_escape : bold_off_escape, bold_escape_len);
 				/* bold on/off has zero print width so line count is unchanged */
 			}
 			p++;
 		} else if (UNEXPECTED(p[0] == '$') && p[1] == 'P') {
-			memcpy (q, prompt_escape, prompt_escape_len);
-			q += prompt_escape_len;
+			q = zend_mempcpy(q, prompt_escape, prompt_escape_len);
 			line_count += prompt_len;
 			p++;
 		} else if (UNEXPECTED(p[0] == '\\')) {
@@ -399,6 +397,7 @@ const phpdbg_help_text_t phpdbg_help_text[] = {
 "  **-s**      **-s=**, **-s**=foo         Read code to execute from stdin with an optional delimiter" CR
 "  **-S**      **-S**cli               Override SAPI name, careful!" CR
 "  **-p**      **-p**, **-p=func**, **-p* **   Output opcodes and quit" CR
+"  **-z**      **-z**extlib            Load Zend extension" CR
 "  **-h**                          Print the help overview" CR
 "  **-V**                          Print version number" CR
 "  **--**      **--** arg1 arg2        Use to delimit phpdbg arguments and php $argv; append any $argv "

@@ -19,7 +19,9 @@
 #ifndef ZEND_STRING_H
 #define ZEND_STRING_H
 
-#include "zend.h"
+#include "zend_types.h"
+#include "zend_gc.h"
+#include "zend_alloc.h"
 
 BEGIN_EXTERN_C()
 
@@ -422,7 +424,7 @@ static zend_always_inline bool zend_string_starts_with_ci(const zend_string *str
 }
 
 #define zend_string_starts_with_literal_ci(str, prefix) \
-	zend_string_starts_with_cstr(str, prefix, strlen(prefix))
+	zend_string_starts_with_cstr_ci(str, prefix, strlen(prefix))
 
 /*
  * DJBX33A (Daniel J. Bernstein, Times 33 with Addition)

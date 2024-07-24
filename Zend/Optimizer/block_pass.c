@@ -172,10 +172,14 @@ static void zend_optimize_block(zend_basic_block *block, zend_op_array *op_array
 					 && opline->opcode != ZEND_SWITCH_LONG
 					 && opline->opcode != ZEND_SWITCH_STRING
 					 && opline->opcode != ZEND_MATCH
+					 && opline->opcode != ZEND_MATCH_ERROR
 					 && zend_optimizer_update_op1_const(op_array, opline, &c)) {
 						VAR_SOURCE(op1) = NULL;
-						literal_dtor(&ZEND_OP1_LITERAL(src));
-						MAKE_NOP(src);
+						if (opline->opcode != ZEND_JMP_NULL
+						 && !zend_bitset_in(used_ext, VAR_NUM(src->result.var))) {
+							literal_dtor(&ZEND_OP1_LITERAL(src));
+							MAKE_NOP(src);
+						}
 						++(*opt_count);
 					} else {
 						zval_ptr_dtor_nogc(&c);
@@ -197,8 +201,10 @@ static void zend_optimize_block(zend_basic_block *block, zend_op_array *op_array
 				ZVAL_COPY(&c, &ZEND_OP1_LITERAL(src));
 				if (zend_optimizer_update_op2_const(op_array, opline, &c)) {
 					VAR_SOURCE(op2) = NULL;
-					literal_dtor(&ZEND_OP1_LITERAL(src));
-					MAKE_NOP(src);
+					if (!zend_bitset_in(used_ext, VAR_NUM(src->result.var))) {
+						literal_dtor(&ZEND_OP1_LITERAL(src));
+						MAKE_NOP(src);
+					}
 					++(*opt_count);
 				} else {
 					zval_ptr_dtor_nogc(&c);
@@ -1011,6 +1017,7 @@ static void assemble_code_blocks(zend_cfg *cfg, zend_op_array *op_array, zend_op
 			case ZEND_ASSERT_CHECK:
 			case ZEND_JMP_NULL:
 			case ZEND_BIND_INIT_STATIC_OR_JMP:
+			case ZEND_JMP_FRAMELESS:
 				ZEND_SET_OP_JMP_ADDR(opline, opline->op2, new_opcodes + blocks[b->successors[0]].start);
 				break;
 			case ZEND_CATCH:

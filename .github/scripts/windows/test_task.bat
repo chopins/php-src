@@ -1,6 +1,4 @@
-@echo off
-
-if /i "%APPVEYOR%%GITHUB_ACTIONS%" neq "True" (
+if /i "%GITHUB_ACTIONS%" neq "True" (
     echo for CI only
     exit /b 3
 )
@@ -32,12 +30,7 @@ set PDO_MYSQL_TEST_PASS=%MYSQL_PWD%
 set PDO_MYSQL_TEST_HOST=%MYSQL_TEST_HOST%
 set PDO_MYSQL_TEST_PORT=%MYSQL_TEST_PORT%
 set PDO_MYSQL_TEST_DSN=mysql:host=%PDO_MYSQL_TEST_HOST%;port=%PDO_MYSQL_TEST_PORT%;dbname=test
-if /i "%APPVEYOR%" equ "True" (
-    set TMP_MYSQL_BIN=%ProgramFiles%\MySql\MySQL Server 5.7\bin
-) else (
-    set TMP_MYSQL_BIN=C:\mysql\bin
-)
-"%TMP_MYSQL_BIN%\mysql.exe" --host=%PDO_MYSQL_TEST_HOST% --port=%MYSQL_TEST_PORT% --user=%MYSQL_TEST_USER% --password=%MYSQL_TEST_PASSWD% -e "CREATE DATABASE IF NOT EXISTS test"
+mysql --host=%PDO_MYSQL_TEST_HOST% --port=%MYSQL_TEST_PORT% --user=%MYSQL_TEST_USER% --password=%MYSQL_TEST_PASSWD% -e "CREATE DATABASE IF NOT EXISTS test"
 if %errorlevel% neq 0 exit /b 3
 
 rem setup PostgreSQL related exts
@@ -46,22 +39,14 @@ set PGPASSWORD=Password12!
 rem set PGSQL_TEST_CONNSTR=host=127.0.0.1 dbname=test port=5432 user=postgres password=Password12!
 echo ^<?php $conn_str = "host=127.0.0.1 dbname=test port=5432 user=%PGUSER% password=%PGPASSWORD%"; ?^> >> "./ext/pgsql/tests/config.inc"
 set PDO_PGSQL_TEST_DSN=pgsql:host=127.0.0.1 port=5432 dbname=test user=%PGUSER% password=%PGPASSWORD%
-if /i "%APPVEYOR%" equ "True" (
-    set TMP_POSTGRESQL_BIN=%ProgramFiles%\PostgreSQL\10\bin
-) else (
-    set TMP_POSTGRESQL_BIN=%PGBIN%
-)
+set TMP_POSTGRESQL_BIN=%PGBIN%
 "%TMP_POSTGRESQL_BIN%\createdb.exe" test
 if %errorlevel% neq 0 exit /b 3
 
 rem setup ODBC related exts
 set ODBC_TEST_USER=sa
 set ODBC_TEST_PASS=Password12!
-if /i "%APPVEYOR%" equ "True" (
-    set ODBC_TEST_DSN=Driver={ODBC Driver 13 for SQL Server};Server=^(local^)\SQL2017;Database=master;uid=%ODBC_TEST_USER%;pwd=%ODBC_TEST_PASS%
-) else (
-    set ODBC_TEST_DSN=Driver={ODBC Driver 17 for SQL Server};Server=^(local^)\SQLEXPRESS;Database=master;uid=%ODBC_TEST_USER%;pwd=%ODBC_TEST_PASS%
-)
+set ODBC_TEST_DSN=Driver={ODBC Driver 17 for SQL Server};Server=^(local^)\SQLEXPRESS;Database=master;uid=%ODBC_TEST_USER%;pwd=%ODBC_TEST_PASS%
 set PDOTEST_DSN=odbc:%ODBC_TEST_DSN%
 
 rem setup Firebird related exts
@@ -98,7 +83,7 @@ set OPENSSL_CONF=
 rem set SSLEAY_CONF=
 
 rem prepare for OPcache
-if "%OPCACHE%" equ "1" set OPCACHE_OPTS=-d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.protect_memory=1 -d opcache.jit_buffer_size=16M
+if "%OPCACHE%" equ "1" set OPCACHE_OPTS=-d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.protect_memory=1 -d opcache.jit_buffer_size=64M -d opcache.jit=tracing
 rem work-around for failing to dl(mysqli) with OPcache (https://github.com/php/php-src/issues/8508)
 if "%OPCACHE%" equ "1" set OPCACHE_OPTS=%OPCACHE_OPTS% -d extension=mysqli
 
@@ -127,7 +112,7 @@ rem prepare for mail
 curl -sLo hMailServer.exe https://www.hmailserver.com/download_file/?downloadid=271
 hMailServer.exe /verysilent
 cd %APPVEYOR_BUILD_FOLDER%
-%PHP_BUILD_DIR%\php.exe -dextension_dir=%PHP_BUILD_DIR% -dextension=com_dotnet appveyor\setup_hmailserver.php
+%PHP_BUILD_DIR%\php.exe -dextension_dir=%PHP_BUILD_DIR% -dextension=com_dotnet .github\setup_hmailserver.php
 
 mkdir %PHP_BUILD_DIR%\test_file_cache
 rem generate php.ini
@@ -138,7 +123,7 @@ rem work-around for some spawned PHP processes requiring OpenSSL
 echo extension=php_openssl.dll >> %PHP_BUILD_DIR%\php.ini
 
 rem remove ext dlls for which tests are not supported
-for %%i in (ldap oci8_12c pdo_oci) do (
+for %%i in (ldap) do (
 	del %PHP_BUILD_DIR%\php_%%i.dll
 )
 
@@ -157,13 +142,6 @@ taskkill /f /im snmpd.exe
 if %EXIT_CODE% GEQ 1 (
 	git checkout ext\pgsql\tests\config.inc
 	git diff > bless_tests.patch
-)
-
-if /i "%APPVEYOR%" equ "True" (
-	appveyor PushArtifact %TEST_PHP_JUNIT%
-	if %EXIT_CODE% GEQ 1 (
-		appveyor PushArtifact bless_tests.patch
-	)
 )
 
 exit /b %EXIT_CODE%

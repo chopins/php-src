@@ -78,10 +78,12 @@ session_write_close();
 
 ?>
 --EXPECTF--
-Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: , handler: MySessionHandler::write) in %s on line %d
+Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: %S, handler: MySessionHandler::write) in %s on line %d
 
-Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: , handler: MySessionHandler::updateTimestamp) in %s on line %d
+Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: %S, handler: MySessionHandler::updateTimestamp) in %s on line %d
 
-Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: , handler: write) in %s on line %d
+Deprecated: Calling session_set_save_handler() with more than 2 arguments is deprecated in %s on line %d
 
-Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: , handler: update_timestamp) in %s on line %d
+Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: %S, handler: write) in %s on line %d
+
+Warning: session_write_close(): Failed to write session data using user defined save handler. (session.save_path: %S, handler: update_timestamp) in %s on line %d

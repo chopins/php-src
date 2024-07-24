@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 8838801d9789d4b77d57b290d993ee37784bbd1f */
+ * Stub hash: 9c0f01839a287d394b78b0dfd37b278a59d1b366 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hash, 0, 2, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, algo, IS_STRING, 0)
@@ -36,7 +36,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_hash_init, 0, 1, HashContext, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hash_update, 0, 2, _IS_BOOL, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hash_update, 0, 2, IS_TRUE, 0)
 	ZEND_ARG_OBJ_INFO(0, context, HashContext, 0)
 	ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -74,6 +74,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hash_pbkdf2, 0, 4, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, iterations, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, length, IS_LONG, 0, "0")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, binary, _IS_BOOL, 0, "false")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_hash_equals, 0, 2, _IS_BOOL, 0)
@@ -132,7 +133,6 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_HashContext___unserialize,
 	ZEND_ARG_TYPE_INFO(0, data, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
-
 ZEND_FUNCTION(hash);
 ZEND_FUNCTION(hash_file);
 ZEND_FUNCTION(hash_hmac);
@@ -167,7 +167,6 @@ ZEND_METHOD(HashContext, __construct);
 ZEND_METHOD(HashContext, __serialize);
 ZEND_METHOD(HashContext, __unserialize);
 
-
 static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hash, arginfo_hash)
 	ZEND_FE(hash_file, arginfo_hash_file)
@@ -179,29 +178,28 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(hash_update_file, arginfo_hash_update_file)
 	ZEND_FE(hash_final, arginfo_hash_final)
 	ZEND_FE(hash_copy, arginfo_hash_copy)
-	ZEND_SUPPORTS_COMPILE_TIME_EVAL_FE(hash_algos, arginfo_hash_algos)
-	ZEND_SUPPORTS_COMPILE_TIME_EVAL_FE(hash_hmac_algos, arginfo_hash_hmac_algos)
+	ZEND_RAW_FENTRY("hash_algos", zif_hash_algos, arginfo_hash_algos, ZEND_ACC_COMPILE_TIME_EVAL, NULL, NULL)
+	ZEND_RAW_FENTRY("hash_hmac_algos", zif_hash_hmac_algos, arginfo_hash_hmac_algos, ZEND_ACC_COMPILE_TIME_EVAL, NULL, NULL)
 	ZEND_FE(hash_pbkdf2, arginfo_hash_pbkdf2)
 	ZEND_FE(hash_equals, arginfo_hash_equals)
 	ZEND_FE(hash_hkdf, arginfo_hash_hkdf)
 #if defined(PHP_MHASH_BC)
-	ZEND_DEP_FE(mhash_get_block_size, arginfo_mhash_get_block_size)
+	ZEND_RAW_FENTRY("mhash_get_block_size", zif_mhash_get_block_size, arginfo_mhash_get_block_size, ZEND_ACC_DEPRECATED, NULL, NULL)
 #endif
 #if defined(PHP_MHASH_BC)
-	ZEND_DEP_FE(mhash_get_hash_name, arginfo_mhash_get_hash_name)
+	ZEND_RAW_FENTRY("mhash_get_hash_name", zif_mhash_get_hash_name, arginfo_mhash_get_hash_name, ZEND_ACC_DEPRECATED, NULL, NULL)
 #endif
 #if defined(PHP_MHASH_BC)
-	ZEND_DEP_FE(mhash_keygen_s2k, arginfo_mhash_keygen_s2k)
+	ZEND_RAW_FENTRY("mhash_keygen_s2k", zif_mhash_keygen_s2k, arginfo_mhash_keygen_s2k, ZEND_ACC_DEPRECATED, NULL, NULL)
 #endif
 #if defined(PHP_MHASH_BC)
-	ZEND_DEP_FE(mhash_count, arginfo_mhash_count)
+	ZEND_RAW_FENTRY("mhash_count", zif_mhash_count, arginfo_mhash_count, ZEND_ACC_DEPRECATED, NULL, NULL)
 #endif
 #if defined(PHP_MHASH_BC)
-	ZEND_DEP_FE(mhash, arginfo_mhash)
+	ZEND_RAW_FENTRY("mhash", zif_mhash, arginfo_mhash, ZEND_ACC_DEPRECATED, NULL, NULL)
 #endif
 	ZEND_FE_END
 };
-
 
 static const zend_function_entry class_HashContext_methods[] = {
 	ZEND_ME(HashContext, __construct, arginfo_class_HashContext___construct, ZEND_ACC_PRIVATE)

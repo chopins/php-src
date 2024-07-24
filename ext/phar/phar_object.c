@@ -608,7 +608,8 @@ PHP_METHOD(Phar, webPhar)
 
 	if ((sapi_mod_name_len == sizeof("cgi-fcgi") - 1 && !strncmp(sapi_module.name, "cgi-fcgi", sizeof("cgi-fcgi") - 1))
 		|| (sapi_mod_name_len == sizeof("fpm-fcgi") - 1 && !strncmp(sapi_module.name, "fpm-fcgi", sizeof("fpm-fcgi") - 1))
-		|| (sapi_mod_name_len == sizeof("cgi") - 1 && !strncmp(sapi_module.name, "cgi", sizeof("cgi") - 1))) {
+		|| (sapi_mod_name_len == sizeof("cgi") - 1 && !strncmp(sapi_module.name, "cgi", sizeof("cgi") - 1))
+		|| (sapi_mod_name_len == sizeof("litespeed") - 1 && !strncmp(sapi_module.name, "litespeed", sizeof("litespeed") - 1))) {
 
 		if (Z_TYPE(PG(http_globals)[TRACK_VARS_SERVER]) != IS_UNDEF) {
 			HashTable *_server = Z_ARRVAL(PG(http_globals)[TRACK_VARS_SERVER]);
@@ -1499,7 +1500,7 @@ static int phar_build(zend_object_iterator *iter, void *puser) /* {{{ */
 			}
 			ZEND_FALLTHROUGH;
 		default:
-			zend_throw_exception_ex(spl_ce_UnexpectedValueException, 0, "Iterator %s returned an invalid value (must return a string)", ZSTR_VAL(ce->name));
+			zend_throw_exception_ex(spl_ce_UnexpectedValueException, 0, "Iterator %s returned an invalid value (must return a string, a stream, or an SplFileInfo object)", ZSTR_VAL(ce->name));
 			return ZEND_HASH_APPLY_STOP;
 	}
 
@@ -2871,6 +2872,13 @@ PHP_METHOD(Phar, setStub)
 	}
 
 	if (zend_parse_parameters_ex(ZEND_PARSE_PARAMS_QUIET, ZEND_NUM_ARGS(), "r|l", &zstub, &len) == SUCCESS) {
+		zend_string *method_name = get_active_function_or_method_name();
+		zend_error(E_DEPRECATED, "Calling %s(resource $stub, int $length) is deprecated", ZSTR_VAL(method_name));
+		zend_string_release(method_name);
+		if (UNEXPECTED(EG(exception))) {
+			RETURN_THROWS();
+		}
+
 		if ((php_stream_from_zval_no_verify(stream, zstub)) != NULL) {
 			if (len > 0) {
 				len = -len;

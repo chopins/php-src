@@ -440,29 +440,7 @@ namespace {
     const PGSQL_TRACE_REGRESS_MODE = UNKNOWN;
 #endif
 
-#ifdef LIBPQ_HAS_PIPELINING
-    /**
-     * @var int
-     * @cvalue PGRES_PIPELINE_SYNC
-     */
-    const PGSQL_PIPELINE_SYNC = UNKNOWN;
-    /**
-     * @var int
-     * @cvalue PQ_PIPELINE_ON
-     */
-    const PGSQL_PIPELINE_ON = UNKNOWN;
-    /**
-     * @var int
-     * @cvalue PQ_PIPELINE_OFF
-     */
-    const PGSQL_PIPELINE_OFF = UNKNOWN;
-    /**
-     * @var int
-     * @cvalue PQ_PIPELINE_ABORTED
-     */
-    const PGSQL_PIPELINE_ABORTED = UNKNOWN;
-#endif
-    
+#ifdef HAVE_PG_CONTEXT_VISIBILITY
     /* For pg_set_error_context_visibility() */
 
     /**
@@ -480,7 +458,7 @@ namespace {
      * @cvalue PQSHOW_CONTEXT_ALWAYS
      */
     const PGSQL_SHOW_CONTEXT_ALWAYS = UNKNOWN;
-    
+#endif
 
     function pg_connect(string $connection_string, int $flags = 0): PgSql\Connection|false {}
 
@@ -624,7 +602,7 @@ namespace {
     function pg_fieldnum(PgSql\Result $result, string $field): int {}
 
     /**
-     * @param string|int $row
+     * @param string|int|null $row
      * @refcount 1
      */
     function pg_fetch_result(PgSql\Result $result, $row, string|int $field = UNKNOWN): string|false|null {}
@@ -671,22 +649,20 @@ namespace {
 
     function pg_result_seek(PgSql\Result $result, int $row): bool {}
 
-    /** @param string|int $row */
+    /** @param string|int|null $row */
     function pg_field_prtlen(PgSql\Result $result, $row, string|int $field = UNKNOWN): int|false {}
 
     /**
      * @param string|int $row
-     * @alias pg_field_prtlen
      * @deprecated
      */
     function pg_fieldprtlen(PgSql\Result $result, $row, string|int $field = UNKNOWN): int|false {}
 
-    /** @param string|int $row */
+    /** @param string|int|null $row */
     function pg_field_is_null(PgSql\Result $result, $row, string|int $field = UNKNOWN): int|false {}
 
     /**
      * @param string|int $row
-     * @alias pg_field_is_null
      * @deprecated
      */
     function pg_fieldisnull(PgSql\Result $result, $row, string|int $field = UNKNOWN): int|false {}
@@ -962,16 +938,15 @@ namespace {
      * @return array<int, array>|string|false
      * @refcount 1
      */
-    function pg_select(PgSql\Connection $connection, string $table_name, array $conditions, int $flags = PGSQL_DML_EXEC, int $mode = PGSQL_ASSOC): array|string|false {}
+    function pg_select(PgSql\Connection $connection, string $table_name, array $conditions = [], int $flags = PGSQL_DML_EXEC, int $mode = PGSQL_ASSOC): array|string|false {}
 
-#ifdef LIBPQ_HAS_PIPELINING
-    function pg_enter_pipeline_mode(PgSql\Connection $connection): bool {}
-    function pg_exit_pipeline_mode(PgSql\Connection $connection): bool {}
-    function pg_pipeline_sync(PgSql\Connection $connection): bool {}
-    function pg_pipeline_status(PgSql\Connection $connection): int {}
+#ifdef HAVE_PG_CONTEXT_VISIBILITY
+    function pg_set_error_context_visibility(PgSql\Connection $connection, int $visibility): int {}
 #endif
 
-    function pg_set_error_context_visibility(PgSql\Connection $connection, int $visibility): int {}
+#ifdef HAVE_PG_RESULT_MEMORY_SIZE
+    function pg_result_memory_size(PgSql\Result $result): int {}
+#endif
 }
 
 namespace PgSql {
