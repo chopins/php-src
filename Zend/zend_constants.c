@@ -557,11 +557,7 @@ ZEND_API zend_result zend_register_constant(zend_constant *c)
 	printf("Registering constant for module %d\n", c->module_number);
 #endif
 
-<<<<<<< HEAD
 	const char *slash = strrchr(ZSTR_VAL(name), ZEND_NS_SEPARATOR);
-=======
-	const char *slash = strrchr(ZSTR_VAL(c->name), '\\');
->>>>>>> b7dd3d8347b22cfc42594653a219b9b3c983105d
 	if (slash) {
 		lowercase_name = zend_string_init(ZSTR_VAL(c->name), ZSTR_LEN(c->name), persistent);
 		zend_str_tolower(ZSTR_VAL(lowercase_name), slash - ZSTR_VAL(c->name));
