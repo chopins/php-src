@@ -26,9 +26,16 @@ simplified write and reuse keyword 简化书写，复用关键字。
     //@attr()@attr2 is syntax error, right use @attr() @attr
     //@attr(1, 4, 5) is right
     ```
-- [x] can be use plus`+` instead of `extends`, can be use colon`:` instead of `implements`.  可使用`+`代替`extends`，使用`:`代替`implements`
+- [x] can be `use` instead of `extends`, remove `implements`.  可使用`use`代替`extends`，删除接口`implements`
     ```php
-    class ClassName + ParentClass : Interface1,Interface2 {}
+    class ClassName {
+        use ParentClass;
+        use ParentClassB : sameMethod as aliasName;
+        use @TraitClass;
+        use TraitClassA;
+        use Interface1;
+        use Interface2;
+    }
     ```
 
 - [x] class member modifier can be use `pub`,`ext`,`my` instead of `public`、`protected`、`private`.类成员修饰符`public`、`protected`、`private`,依次更改为为`pub`、`ext`、`my`
@@ -49,10 +56,10 @@ simplified write and reuse keyword 简化书写，复用关键字。
 
     }
     public function b() {
-        my::a();
+        my.a();
     }
     public function c() {
-        $my->b();
+        $my.b();
     }
   }
   ```
