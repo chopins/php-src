@@ -42,10 +42,10 @@ simplified write and reuse keyword 简化书写，复用关键字。
     ```php
     class ClassName {
         pub $publicProperty;
-        ext $protectedProperty;
+        union $protectedProperty;
         my $privateProperty;
         pub function publicMethod() {}
-        ext function protectMethod() {}
+        union function protectMethod() {}
         my function privateMethod() {}
     }
     ```
@@ -99,7 +99,7 @@ simplified write and reuse keyword 简化书写，复用关键字。
             $this.$property = 0;
             $this.protectedMethod();
         }
-        ext protectedMethod() {
+        union protectedMethod() {
 
         }
     }

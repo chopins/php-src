@@ -64,27 +64,27 @@ class ClassB
     @readonly
     pub static int $pubStatic;
 
-    ext static string $proStatic;
+    union static string $proStatic;
 
     inner static array $priStatic;
 
     pub int $pubVar;
 
-    ext string $proVar;
+    union string $proVar;
 
-    inner array $priVar;
+    my array $priVar;
 
     pub MethodA()
     {
         //method A
-        $this.CMethodA();
+        $my.CMethodA();
     }
 
     pub fun1($args)
     {
-        $this.CFun1();
-        $this.pubVar = 1;
-        this.$pubStatic = 'string1';
+        $my.CFun1();
+        $my.pubVar = 1;
+        my.$pubStatic = 'string1';
         $arr = ['k1' : 'v1', 'k2' : 'v2'];
         for($arr as $k : $v) {
         }
@@ -96,22 +96,22 @@ class ClassB
         } for (true);
     }
 
-    ext fun2($args)
+    union fun2($args)
     {
-        $this.proVar = 'string2';
-        this.$proStatic = 'string2'
+        $my.proVar = 'string2';
+        my.$proStatic = 'string2'
         $fn = ()=> $a + $b;// Arrow function
-        if($a is $this) {
+        if($a is $my) {
         }
     }
 
     inner fun3($args)
     {
-        $this.priVar = [];
-        this.$priStatic = [];
+        $my.priVar = [];
+        my.$priStatic = [];
         ClassA.func2();
-        this.funcStatic();
-        $this.func2($a);
+        my.funcStatic();
+        $my.func2($a);
     }
 
     pub static funcStatic()
