@@ -51,36 +51,32 @@
 namespace TopNamespaceD.NamespaceD;
 
 use TopNamespaceA.NamespaceA.ClassA;
-use TopNamespaceB.NamespaceB.InterfaceA;
-use TopNamespaceC.NamespaceC.InterfaceB;
 
 @final
 class ClassB
 {
     use ClassA;
     use ClassC : MethodA as CMethodA, fun1 as CFun1;
-    use InterfaceA;
-    use InterfaceB;
     @readonly
-    pub static int $pubStatic;
+    any static int $pubStatic;
 
-    union static string $proStatic;
+    kin static string $proStatic;
 
-    inner static array $priStatic;
+    my static array $priStatic;
 
     pub int $pubVar;
 
-    union string $proVar;
+    kin string $proVar;
 
     my array $priVar;
 
-    pub MethodA()
+    any MethodA()
     {
         //method A
         $my.CMethodA();
     }
 
-    pub fun1($args)
+    any fun1($args)
     {
         $my.CFun1();
         $my.pubVar = 1;
@@ -96,11 +92,11 @@ class ClassB
         } for (true);
     }
 
-    union fun2($args)
+    kin fun2($args)
     {
         $my.proVar = 'string2';
         my.$proStatic = 'string2'
-        $fn = ()=> $a + $b;// Arrow function
+        $fn = ()($a + $b);// Arrow function
         if($a is $my) {
         }
     }
@@ -114,7 +110,7 @@ class ClassB
         $my.func2($a);
     }
 
-    pub static funcStatic()
+    any static funcStatic()
     {
 
     }
