@@ -52,11 +52,30 @@ namespace TopNamespaceD.NamespaceD;
 
 use TopNamespaceA.NamespaceA.ClassA;
 
+class A {
+    any funA()
+    {
+
+    }
+}
+
+class C {
+    any funA()
+    {
+
+    }
+    any fun1()
+    {
+
+    }
+}
+
 @final
 class ClassB
 {
     use ClassA;
-    use ClassC : MethodA as CMethodA, fun1 as CFun1;
+    use ClassC : funA as cfunA, fun1 as cfun1;
+    use NSTopB.NSD.ClassD;
     @readonly
     any static int $pubStatic;
 
@@ -70,15 +89,17 @@ class ClassB
 
     my array $priVar;
 
-    any MethodA()
+    any funA()
     {
         //method A
-        $my.CMethodA();
+        $my.cfunA();
+        $my:ClassA.funA();
+        $my:NSTopB.NSD.ClassD.funD();
     }
 
     any fun1($args)
     {
-        $my.CFun1();
+        $my.cfun1();
         $my.pubVar = 1;
         my.$pubStatic = 'string1';
         $arr = ['k1' : 'v1', 'k2' : 'v2'];
@@ -92,7 +113,7 @@ class ClassB
         } for (true);
     }
 
-    kin fun2($args)
+    kin fun2($args) int
     {
         $my.proVar = 'string2';
         my.$proStatic = 'string2'
@@ -114,7 +135,9 @@ class ClassB
     {
 
     }
+    any __init($arg1, $arg2) {
 
+    }
     // public function __toString(): string
     string {  }
 
@@ -137,7 +160,7 @@ class ClassB
     wakeup { }
 
     // public function __destruct(): void
-    destruct { }
+    free { }
 
     // public function __sleep(): array
     sleep { }
@@ -149,31 +172,31 @@ class ClassB
     dump { }
 
     // public function __get(string $name): mixed
-    get($name) { }
+    get { }
 
-    // public function __set(string $name, mixed $v): void
-    set($name, $v) { }
+    // public function __set(string $name, mixed $value): void
+    set { }
 
-    // public function __call(string $name, array $args): mixed
-    call($name, $args) { }
+    // public function __call(string $name, array $value): mixed
+    call  { }
 
-    // public function __callStatic(string $name, array $args): mixed
-    static($name, $args) { }
+    // public function __callStatic(string $name, array $value): mixed
+    static  { }
 
     // public function __isset(string $name): bool
-    isset($name) { }
+    isset { }
 
     // public function __unset(string $name): void
-    unset($name) { }
+    unset { }
 
-    // public function __unserialize(array $data): void
-    unserialize(array $data) { }
+    // public function __unserialize(array $value): void
+    unserialize { }
     
-    // public static function __invoke(...$values): mixed
-    invoke(...$values) { }
+    // public static function __invoke(...$value): mixed
+    invoke { }
 
-    // public static function __set_state(array $properties): object
-    export(array $properties) { }
+    // public static function __set_state(array $value): object
+    export  { }
     
 }
 
