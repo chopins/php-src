@@ -52,10 +52,58 @@ namespace TopNamespaceD.NamespaceD;
 
 use TopNamespaceA.NamespaceA.ClassA;
 
+global $a = 'superglobals'; //超全局变量
+$b = 'local variable'; //局部变量
+var $c = 'block variable c1'; //块变量$c
+
+echo $c; //block variable c1
+echo $a; //superglobals
+echo $b; //local variable
+
+for(true)
+{
+    echo $a; //superglobals
+    echo $b; //local variable
+
+    echo $c; //Notice:未定义
+    var $c = 'block variable c2'; //新块变量$c
+    echo $c; //block variable c2
+}
+
+echo $c; //block variable c1
+
+fn func1()
+{
+    echo $a; //superglobals
+    echo $b; //Notice:未定义
+    echo $c; //Notice:未定义
+}
+
+fn func2()
+{
+    parent $b, $c;
+    echo $a; //superglobals
+    echo $b; //local variable
+    echo $c; //block variable c1
+}
+if(true)
+{
+    var $d = 'block variable d';
+    fn func3()
+    {
+        parent $b, $c, $d;
+        echo $a; //superglobals
+        echo $b; //local variable
+        echo $c; //Notice:未定义
+        echo $d; //block variable d
+    }
+}
+
 class A {
     any funA()
     {
-
+        echo $a; //superglobals
+        echo $b; //Notice:未定义
     }
 }
 
