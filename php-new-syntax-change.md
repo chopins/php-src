@@ -44,6 +44,8 @@
 | `final`                                 | `@final`                 | 改为注解                   |
 | HTML                                    | `` ```TAG      TAG``` `` | HTML代码开始               |
 | `<?php ?>`                              |                          | PHP文件开始省略            |
+| `switch case`                           | `case`                   |                            |
+| `function`                              | `fn`                     |                            |
 
 # 语法例子
 
@@ -61,6 +63,21 @@ var $c = 'block variable c1'; //块变量$c
 echo $c; //block variable c1
 echo $a; //superglobals
 echo $b; //local variable
+
+case {
+    1 =>
+    expr;
+    break
+    2 =>
+    expr
+    break;
+    3 ==>
+    expr
+    break;
+    _ =>
+    expr
+    break;
+}
 
 for(true)
 {
@@ -121,9 +138,8 @@ class C {
 }
 
 @final
-class ClassB
+class ClassB use ClassA
 {
-    use ClassA;
     use ClassC : funA as cfunA, fun1 as cfun1;
     use NSTopB.NSD.ClassD;
     @readonly
@@ -133,11 +149,11 @@ class ClassB
 
     my static array $priStatic;
 
-    pub int $pubVar;
+    pub int pubVar;//non-static-variable
 
-    kin string $proVar;
+    kin string proVar;
 
-    my array $priVar;
+    my array priVar;
 
     any funA()
     {
