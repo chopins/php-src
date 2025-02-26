@@ -11,6 +11,8 @@
 | `extends`                               | `use CLASS`              | class 继承                 |
 | `extends`                               | `use CLASS:METHOD as MN` | class 继承                 |
 | `implements`                            | __DELETE__               | 接口实现                   |
+| `include`                               | `use ?'__STRING__'`      | 包含文件，字符串           |
+| `require`                               | `use '__STRING__'`       |                            |
 | `trait`                                 | `use` `@NAME`            | 合并方法                   |
 | `public function __get()`               | `get()`                  | get 魔术方法短写           |
 | `public function __call()`              | `call()`                 | call 魔术方法短写          |
@@ -35,7 +37,7 @@
 | `[ KEY => VAL ]`                        | `[ KEY : VAL ]`          | 数组声明中冒号代替箭头符号 |
 | `array( KEY => VAL )`                   | `array( KEY : VAL )`     | 数组声明中冒号代替箭头符号 |
 | `( ARRAY as KEY => VAL)`                | `( ARRAY as KEY : VAL)`  | foreach中冒号代替箭头符号  |
-| `fn()=>`                                | `()=>`                   | 箭头函数去掉 fn            |
+| `fn()=>`                                | `()->`                   | 箭头函数去掉 fn            |
 | `self`                                  | `this`                   | 当前类                     |
 | `abstract`                              | __DELETE__               | 改为无方法代码块           |
 | `readonly`                              | `@readonly`              | 改为注解                   |
@@ -212,7 +214,7 @@ class ClassB
 
     // public function __sleep(): array
     sleep { }
-    
+
     // public function __clone(): void
     clone { }
 
@@ -239,13 +241,13 @@ class ClassB
 
     // public function __unserialize(array $value): void
     unserialize { }
-    
+
     // public static function __invoke(...$value): mixed
     invoke { }
 
     // public static function __set_state(array $value): object
     export  { }
-    
+
 }
 
 ```
