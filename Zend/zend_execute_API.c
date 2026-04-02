@@ -145,7 +145,6 @@ void init_executor(void) /* {{{ */
 	EG(function_table) = CG(function_table);
 	EG(class_table) = CG(class_table);
 
-	EG(in_autoload) = NULL;
 	EG(error_handling) = EH_NORMAL;
 	EG(flags) = EG_FLAGS_INITIAL;
 
@@ -156,6 +155,7 @@ void init_executor(void) /* {{{ */
 	zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_activator);
 
 	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
+	zend_hash_init(&EG(autoload_current_classnames), 8, NULL, NULL, 0);
 
 	EG(ticks_count) = 0;
 
@@ -192,8 +192,7 @@ void init_executor(void) /* {{{ */
 	EG(get_gc_buffer).start = EG(get_gc_buffer).end = EG(get_gc_buffer).cur = NULL;
 
 	EG(record_errors) = false;
-	EG(num_errors) = 0;
-	EG(errors) = NULL;
+	memset(&EG(errors), 0, sizeof(EG(errors)));
 
 	EG(filename_override) = NULL;
 	EG(lineno_override) = -1;
@@ -503,16 +502,13 @@ void shutdown_executor(void) /* {{{ */
 		}
 
 		zend_hash_destroy(&EG(included_files));
+		zend_hash_destroy(&EG(autoload_current_classnames));
 
 		zend_stack_destroy(&EG(user_error_handlers_error_reporting));
 		zend_stack_destroy(&EG(user_error_handlers));
 		zend_stack_destroy(&EG(user_exception_handlers));
 		zend_lazy_objects_destroy(&EG(lazy_objects_store));
 		zend_objects_store_destroy(&EG(objects_store));
-		if (EG(in_autoload)) {
-			zend_hash_destroy(EG(in_autoload));
-			FREE_HASHTABLE(EG(in_autoload));
-		}
 
 		if (EG(ht_iterators) != EG(ht_iterators_slots)) {
 			efree(EG(ht_iterators));
@@ -1245,12 +1241,7 @@ ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *
 		return NULL;
 	}
 
-	if (EG(in_autoload) == NULL) {
-		ALLOC_HASHTABLE(EG(in_autoload));
-		zend_hash_init(EG(in_autoload), 8, NULL, NULL, 0);
-	}
-
-	if (zend_hash_add_empty_element(EG(in_autoload), lc_name) == NULL) {
+	if (zend_hash_add_empty_element(&EG(autoload_current_classnames), lc_name) == NULL) {
 		if (!key) {
 			zend_string_release_ex(lc_name, 0);
 		}
@@ -1272,7 +1263,7 @@ ZEND_API zend_class_entry *zend_lookup_class_ex(zend_string *name, zend_string *
 	EG(lineno_override) = previous_lineno;
 
 	zend_string_release_ex(autoload_name, 0);
-	zend_hash_del(EG(in_autoload), lc_name);
+	zend_hash_del(&EG(autoload_current_classnames), lc_name);
 
 	if (!key) {
 		zend_string_release_ex(lc_name, 0);
@@ -1562,7 +1553,6 @@ static void zend_set_timeout_ex(zend_long seconds, bool reset_signals) /* {{{ */
 		if (!DeleteTimerQueueTimer(NULL, tq_timer, INVALID_HANDLE_VALUE)) {
 			tq_timer = NULL;
 			zend_error_noreturn(E_ERROR, "Could not delete queued timer");
-			return;
 		}
 		tq_timer = NULL;
 	}
@@ -1572,7 +1562,6 @@ static void zend_set_timeout_ex(zend_long seconds, bool reset_signals) /* {{{ */
 	if (!CreateTimerQueueTimer(&tq_timer, NULL, (WAITORTIMERCALLBACK)tq_timer_cb, (VOID*)eg, seconds*1000, 0, WT_EXECUTEONLYONCE)) {
 		tq_timer = NULL;
 		zend_error_noreturn(E_ERROR, "Could not queue new timer");
-		return;
 	}
 #elif defined(ZEND_MAX_EXECUTION_TIMERS)
 	if (seconds > 0) {
@@ -1659,7 +1648,6 @@ void zend_unset_timeout(void) /* {{{ */
 			zend_atomic_bool_store_ex(&EG(timed_out), false);
 			tq_timer = NULL;
 			zend_error_noreturn(E_ERROR, "Could not delete queued timer");
-			return;
 		}
 		tq_timer = NULL;
 	}

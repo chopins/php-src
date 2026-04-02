@@ -1,6 +1,9 @@
 <?php
 
-/** @generate-class-entries */
+/**
+ * @generate-class-entries
+ * @generate-c-enums
+ */
 
 /* array.c */
 
@@ -1871,7 +1874,7 @@ function array_product(array $array): int|float {}
 
 function array_reduce(array $array, callable $callback, mixed $initial = null): mixed {}
 
-function array_filter(array $array, ?callable $callback = null, int $mode = 0): array {}
+function array_filter(array $array, ?callable $callback = null, int $mode = ARRAY_FILTER_USE_KEY): array {}
 
 function array_find(array $array, callable $callback): mixed {}
 
@@ -2315,16 +2318,16 @@ function strcoll(string $string1, string $string2): int {}
  * @frameless-function {"arity": 1}
  * @frameless-function {"arity": 2}
  */
-function trim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function trim(string $string, string $characters = " \f\n\r\t\v\0"): string {}
 
 /** @compile-time-eval */
-function rtrim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function rtrim(string $string, string $characters = " \f\n\r\t\v\0"): string {}
 
 /** @alias rtrim */
-function chop(string $string, string $characters = " \n\r\t\v\0"): string {}
+function chop(string $string, string $characters = " \f\n\r\t\v\0"): string {}
 
 /** @compile-time-eval */
-function ltrim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function ltrim(string $string, string $characters = " \f\n\r\t\v\0"): string {}
 
 /**
  * @compile-time-eval
