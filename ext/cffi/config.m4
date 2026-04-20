@@ -1,0 +1,42 @@
+PHP_ARG_WITH([cffi],
+  [for C FFI support],
+  [AS_HELP_STRING([--with-cffi],
+    [Include C FFI support])])
+
+AS_VAR_IF([PHP_CFFI], [no],, [
+  PKG_CHECK_MODULES([CFFI], [libffi >= 3.0.11])
+
+  PHP_EVAL_INCLINE([$CFFI_CFLAGS])
+  PHP_EVAL_LIBLINE([$CFFI_LIBS], [CFFI_SHARED_LIBADD])
+
+  AC_DEFINE([HAVE_CFFI], [1],
+    [Define to 1 if the PHP extension 'cffi' is available.])
+
+  AC_CHECK_TYPES([long double])
+
+  AC_DEFUN([PHP_CFFI_CHECK_DECL],
+  [AC_CHECK_DECL([$1],
+    [AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$1]), [1],
+      [Define to 1 if libffi supports the '$1' calling convention.])],,
+    [#include <ffi.h>])])
+
+  CFLAGS_SAVE=$CFLAGS
+  CFLAGS="$CFLAGS $FFI_CFLAGS"
+
+  PHP_CFFI_CHECK_DECL([FFI_FASTCALL])
+  PHP_CFFI_CHECK_DECL([FFI_THISCALL])
+  PHP_CFFI_CHECK_DECL([FFI_STDCALL])
+  PHP_CFFI_CHECK_DECL([FFI_PASCAL])
+  PHP_CFFI_CHECK_DECL([FFI_REGISTER])
+  PHP_CFFI_CHECK_DECL([FFI_MS_CDECL])
+  PHP_CFFI_CHECK_DECL([FFI_SYSV])
+
+  CFLAGS=$CFLAGS_SAVE
+
+  PHP_NEW_EXTENSION([cffi],
+    [cffi.c],
+    [$ext_shared],,
+    [-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1])
+
+  PHP_SUBST([CFFI_SHARED_LIBADD])
+])
