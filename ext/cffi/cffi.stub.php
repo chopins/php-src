@@ -30,72 +30,95 @@ interface CArray
 }
 interface Unsigned {}
 
-interface __Stdcall {}
+#ifdef HAVE_FFI_STDCALL
+interface __Stdcall {
+}
+#endif
 
 #ifdef HAVE_FFI_VECTORCALL_PARTIAL
-interface __Vectorcall {}
+interface __Vectorcall {
+}
 #endif
 #ifdef HAVE_FFI_FASTCALL
-interface __Fastcall {}
+interface __Fastcall {
+}
 #endif
 #ifdef HAVE_FFI_THISCALL
-interface __Thiscall {}
+interface __Thiscall {
+}
 #endif
 #ifdef HAVE_FFI_PASCAL
-interface __Pascal {}
+interface __Pascal {
+}
 #endif
 #ifdef HAVE_FFI_REGISTER
 interface __Register {}
 #endif
 #ifdef HAVE_FFI_MS_CDECL
-interface __MSCdecl {}
+interface __MSCdecl {
+}
 #endif
 #ifdef HAVE_FFI_SYSV
-interface __Sysv {}
+interface __Sysv {
+}
 #endif
 
-interface DL {
-    const string DL_FILE = '';
+#ifdef HAVE_FFI_UNIX64
+interface __Unix64 {
 }
-abstract class Type
+#endif
+
+#ifdef HAVE_FFI_WIN64
+interface __Win64 {
+}
+#endif
+
+#ifdef HAVE_FFI_GNUW64
+interface __Gnuw64 {
+}
+#endif
+
+abstract class DL {
+    final public function __construct()
+    {
+    }
+    final static public function isNull(Pointer &$p): bool {}
+    final static public function free(Pointer &$p): void {}
+    final static public function memcmp(Pointer &$ptr1, Pointer &$ptr2, int $size): int {}
+    final static public function memcpy(Pointer &$to, Pointer &$form, int $size): void {}
+    final static public function memset(Pointer &$p, int $value, int $size): void {}
+    final static public function addr(Type &$p): Pointer {}
+    final static public function alignof(Type &$p): int {}
+    final static public function sizeof(Type &$p): int {}
+}
+interface  Type
 {
-    final public function __construct(int|float|string|array|bool|null|Type $value = null, bool $owned = true, bool  $persistent = false) {}
-    final public function isNull(): bool {}
-    final public function free(): void {}
-    final public function getValue(): int|float|string|array|bool|null {}
-    final public function memcmp(Type &$ptr2): int {}
-    final public function memcpy(P &$to, int $size): void {}
-    final public function memset(int $value, int $size): void {}
-    final public function addr(): P {}
-    final public function cast(): ?Type {}
-    final static public function sizeof(): int {}
-    final static public function getAlignment(): int {}
-}
-abstract class Struct extends Type {
-}
-abstract class Union extends Type {
-}
-class CVoid extends Type {
-}
-
-class F64 extends Type {
 
 }
-class F32 extends Type {
+abstract class Struct implements Type {
+}
+abstract class Union implements Type {
+}
+abstract class CVoid implements Type {
 
+}
+
+class F64 implements Type {
+}
+class F32 implements Type {
 }
 #ifdef HAVE_LONG_DOUBLE
-class FL extends Type {
+class FL implements Type {
 }
 #endif
-class I8 extends Type {
+class I8 implements Type {
 }
 class Char extends I8 {
 }
-class I16 extends Type {
+class I16 implements Type {
 }
-class I32 extends Type {
+class I32 implements Type {
 }
-class I64 extends Type {
+class I64 implements Type {
 }
 class Exception extends \Error {}
