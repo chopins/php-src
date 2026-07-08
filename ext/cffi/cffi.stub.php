@@ -6,6 +6,7 @@
  */
 
 namespace C;
+interface Type {}
 interface Pointer {}
 interface P1 extends Pointer
 {
@@ -90,10 +91,6 @@ abstract class DL {
     final static public function addr(Type &$p): Pointer {}
     final static public function alignof(Type &$p): int {}
     final static public function sizeof(Type &$p): int {}
-}
-interface  Type
-{
-
 }
 abstract class Struct implements Type {
 }

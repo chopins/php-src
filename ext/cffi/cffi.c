@@ -20,14 +20,13 @@
 
 #include "php.h"
 #include "php_cffi.h"
-
+#include "zend_API.h"
 #include <ffi.h>
 #include <sys/types.h>
-
 #include "cffi_arginfo.h"
 #include "ext/standard/info.h"
 #include "main/SAPI.h"
-#include "zend_API.h"
+
 #include "zend_exceptions.h"
 #include "zend_observer.h"
 
@@ -60,7 +59,9 @@ typedef struct _cffi_dl_object {
 } cffi_dl_object;
 typedef struct _cffi_type_object {
 	zend_object std;
-	int type;
+	int base_type;
+	bool is_pointer;
+	bool is_array;
 	union {
 		void* p;
 		int8_t i8;
@@ -73,12 +74,20 @@ typedef struct _cffi_type_object {
 		uint64_t u64;
 		float f32;
 		double f64;
-		char c[1];
+		char c;
 #ifdef HAVE_LONG_DOUBLE
 		long double ld;
 #endif
 	} v;
 } cffi_type_object;
+
+typedef struct _cffi_class_entry
+{
+	zend_class_entry zce;
+	size_t size;
+	ffi_type *type;
+} cffi_class_entry;
+
 
 static zend_class_entry* cffi_ce_C_Exception;
 static zend_class_entry* cffi_ce_C_DL;
@@ -122,20 +131,20 @@ static zend_class_entry* cffi_ce_C_ABI_Gnuw64;
 
 static zend_class_entry* cffi_ce_C_Unsigned;
 static zend_class_entry* cffi_ce_C_Pointer;
-static zend_class_entry* cffi_ce_C_P1;
-static zend_class_entry* cffi_ce_C_P2;
-static zend_class_entry* cffi_ce_C_P3;
-static zend_class_entry* cffi_ce_C_P4;
-static zend_class_entry* cffi_ce_C_CVoid;
-static zend_class_entry* cffi_ce_C_Char;
-static zend_class_entry* cffi_ce_C_F32;
-static zend_class_entry* cffi_ce_C_F64;
-static zend_class_entry* cffi_ce_C_I8;
-static zend_class_entry* cffi_ce_C_I16;
-static zend_class_entry* cffi_ce_C_I32;
-static zend_class_entry* cffi_ce_C_I64;
+static cffi_class_entry* cffi_ce_C_P1;
+static cffi_class_entry* cffi_ce_C_P2;
+static cffi_class_entry* cffi_ce_C_P3;
+static cffi_class_entry* cffi_ce_C_P4;
+static cffi_class_entry* cffi_ce_C_CVoid;
+static cffi_class_entry* cffi_ce_C_Char;
+static cffi_class_entry* cffi_ce_C_F32;
+static cffi_class_entry* cffi_ce_C_F64;
+static cffi_class_entry* cffi_ce_C_I8;
+static cffi_class_entry* cffi_ce_C_I16;
+static cffi_class_entry* cffi_ce_C_I32;
+static cffi_class_entry* cffi_ce_C_I64;
 #ifdef HAVE_LONG_DOUBLE
-static zend_class_entry* cffi_ce_C_FL;
+static cffi_class_entry* cffi_ce_C_FL;
 #endif
 
 static zend_object_handlers cffi_dl_handlers;
@@ -153,9 +162,37 @@ static zend_object_handlers cffi_type_handlers;
 #define CFFI_EX_FN_ARGC CFFI_EX_FN_VAL(num_args)
 
 /* C\DL and ABI interface: zend_class_entry.enum_backing_type is FFI_ABI */
-#define CFFI_CE_EXT_TYPE(ce) ce->enum_backing_type
-
-static zend_always_inline ffi_type* cffi_get_ffi_type(zend_class_entry *ce) {
+#define CFFI_CE_EXT_TYPE(ce) ce->type
+static size_t cffi_get_type_size(zend_class_entry* ctype) {
+	switch (CFFI_CE_EXT_TYPE(ctype)) {
+		case FFI_TYPE_SINT8:
+		case FFI_TYPE_UINT8:
+			return sizeof(int8_t);
+		case FFI_TYPE_SINT16:
+		case FFI_TYPE_UINT16:
+			return sizeof(int16_t);
+		case FFI_TYPE_SINT32:
+		case FFI_TYPE_UINT32:
+			return sizeof(int32_t);
+		case FFI_TYPE_SINT64:
+		case FFI_TYPE_UINT64:
+			return sizeof(int64_t);
+		case FFI_TYPE_FLOAT:
+			return sizeof(float);
+		case FFI_TYPE_DOUBLE:
+			return sizeof(double);
+		case FFI_TYPE_POINTER:
+			return sizeof(void*);
+		case FFI_TYPE_VOID:
+			return sizeof(void);
+#ifdef HAVE_LONG_DOUBLE
+		case FFI_TYPE_LONGDOUBLE:
+			return sizeof(long double);
+#endif
+	}
+	return 0;
+}
+static zend_always_inline ffi_type* cffi_get_ffi_type(zend_class_entry* ce) {
 	switch (CFFI_CE_EXT_TYPE(ce)) {
 		case FFI_TYPE_SINT8:
 			return &ffi_type_sint8;
@@ -179,8 +216,10 @@ static zend_always_inline ffi_type* cffi_get_ffi_type(zend_class_entry *ce) {
 			return &ffi_type_double;
 		case FFI_TYPE_POINTER:
 			return &ffi_type_pointer;
+#ifdef HAVE_LONG_DOUBLE
 		case FFI_TYPE_LONGDOUBLE:
 			return &ffi_type_longdouble;
+#endif
 		case FFI_TYPE_VOID:
 			return &ffi_type_void;
 		default:
@@ -188,18 +227,25 @@ static zend_always_inline ffi_type* cffi_get_ffi_type(zend_class_entry *ce) {
 	}
 }
 
+
 #define CFFI_CE_TYPE_SET(ce, type) CFFI_CE_EXT_TYPE(ce) = type
 #define CFFI_CE_TYPE_CHECK(ce, type) cffi_get_ffi_type(ce) == &type
 #define CFFI_CE_TYPE_COPY(ce1, ce2) CFFI_CE_EXT_TYPE(ce1) = CFFI_CE_EXT_TYPE(ce2);
 
-#define CFFI_REG_FFI_TYPE(cename, pce, type)             \
-	cffi_ce_C_##cename = register_class_C_##cename(pce); \
-	CFFI_CE_EXT_TYPE(cffi_ce_C_##cename) = FFI_TYPE_##type; \
+#define CFFI_REG_TYPE_CLASS_START() zend_string *_r_class_lowercase_name;zend_class_entry* __reg_orign_ce
+#define CFFI_REG_TYPE_CLASS_END() zend_string_release_ex(_r_class_lowercase_name, 1)
+#define CFFI_REG_FFI_TYPE(__ce_name, __parent_ce, __ffi_type)             \
+	__reg_orign_ce = register_class_C_##__ce_name(__parent_ce);\
+	cffi_ce_C_##__ce_name = realloc(__reg_orign_ce, sizeof(cffi_class_entry)); \
+	_r_class_lowercase_name = zend_string_tolower_ex(cffi_ce_C_##__ce_name->zce.name, EG(current_module)->type == MODULE_PERSISTENT);\
+	zend_hash_update_ptr(CG(class_table), _r_class_lowercase_name, cffi_ce_C_##__ce_name);\
+	CFFI_CE_EXT_TYPE(cffi_ce_C_##__ce_name) = &ffi_type_##__ffi_type;
 
-#define CFFI_REG_FFI_TYPE_H(cename, pce, type)	\
-	CFFI_REG_FFI_TYPE(cename, pce, type)	\
-	cffi_ce_C_##cename->create_object = cffi_type_new;	\
-	cffi_ce_C_##cename->default_object_handlers = &cffi_type_handlers;
+
+#define CFFI_REG_FFI_TYPE_H(cename, pce, type)         \
+	CFFI_REG_FFI_TYPE(cename, pce, type)               \
+	cffi_ce_C_##cename->zce.create_object = cffi_type_new; \
+	cffi_ce_C_##cename->zce.default_object_handlers = &cffi_type_handlers;
 
 #define CFFI_REG_ABI_INTERFACE(class, abi)                                              \
 	cffi_ce_C_ABI_##class = register_class_C___##class();                               \
@@ -216,15 +262,15 @@ static int cffi_early_class_implements_interface(zend_class_entry* class_type, z
 		for (i = 0; i < class_type->num_interfaces; i++) {
 			if (class_type->interfaces[i] == interface_ce) {
 				return 1;
-			} else if(class_type->interfaces[i]->num_interfaces) {
+			} else if (class_type->interfaces[i]->num_interfaces) {
 				arr[n] = i;
 				n++;
 			}
 		}
 
-		if(n > 0) {
-			for(int k=0;k< n;k++) {
-				if(cffi_early_class_implements_interface(class_type->interfaces[arr[k]], interface_ce)) {
+		if (n > 0) {
+			for (int k = 0; k < n; k++) {
+				if (cffi_early_class_implements_interface(class_type->interfaces[arr[k]], interface_ce)) {
 					return 1;
 				}
 			}
@@ -235,39 +281,41 @@ static int cffi_early_class_implements_interface(zend_class_entry* class_type, z
 
 static int cffi_implement_check_require(zend_class_entry* interface, zend_class_entry* class_type) /* {{{ */
 {
-	if(class_type->type == ZEND_INTERNAL_CLASS) {
+	if (class_type->type == ZEND_INTERNAL_CLASS) {
 		return SUCCESS;
 	}
-	if(interface == cffi_ce_C_Type) {
-		if(class_type->parent == NULL || !zend_class_implements_interface(class_type->parent, cffi_ce_C_Type)) {
+
+	if (interface == cffi_ce_C_Type) {
+		if (class_type->parent == NULL || !zend_class_implements_interface(class_type->parent, cffi_ce_C_Type)) {
 			CFFI_IMP_REQUIRE_ERROR("User class %s cannot implement %s", ZSTR_VAL(cffi_ce_C_Type->name));
 			return FAILURE;
 		}
 
-		if(!cffi_early_class_implements_interface(class_type, cffi_ce_C_Pointer) && instanceof_function(class_type, cffi_ce_C_CVoid)) {
+		if (!cffi_early_class_implements_interface(class_type, cffi_ce_C_Pointer) && instanceof_function(class_type, &cffi_ce_C_CVoid->zce)) {
 			CFFI_IMP_REQUIRE_ERROR("Void class %s must implements interface %s", ZSTR_VAL(cffi_ce_C_Pointer->name));
 			return FAILURE;
 		}
+		CFFI_CE_EXT_TYPE(class_type) = CFFI_CE_EXT_TYPE(class_type->parent);
 		return SUCCESS;
 	}
 
-	if ((interface == cffi_ce_C_CArray || interface == cffi_ce_C_Pointer) && !cffi_early_class_implements_interface(class_type, cffi_ce_C_Type)) {
+	if (!cffi_early_class_implements_interface(class_type, cffi_ce_C_Type)) {
 		CFFI_IMP_REQUIRE_ERROR("Class %s must first inherit a class that implements interface %s", ZSTR_VAL(cffi_ce_C_Type->name));
 		return FAILURE;
 	}
 
 	if (interface == cffi_ce_C_Unsigned) {
-		if (!EXPECTED(CFFI_CE_EXT_TYPE(class_type) >= 0)) {
+		if (!class_type->parent) {
 			return FAILURE;
-		};
-		ffi_type *ftype = cffi_get_ffi_type(class_type);
-		if (ftype == &ffi_type_sint8) {
+		}
+
+		if (CFFI_CE_EXT_TYPE(class_type) == FFI_TYPE_SINT8) {
 			CFFI_CE_TYPE_SET(class_type, FFI_TYPE_UINT8);
-		} else if (ftype == &ffi_type_sint16) {
+		} else if (CFFI_CE_EXT_TYPE(class_type) == FFI_TYPE_SINT16) {
 			CFFI_CE_TYPE_SET(class_type, FFI_TYPE_UINT16);
-		} else if (ftype == &ffi_type_sint32) {
+		} else if (CFFI_CE_EXT_TYPE(class_type) == FFI_TYPE_SINT32) {
 			CFFI_CE_TYPE_SET(class_type, FFI_TYPE_UINT32);
-		} else if (ftype == &ffi_type_sint64) {
+		} else if (CFFI_CE_EXT_TYPE(class_type) == FFI_TYPE_SINT64) {
 			CFFI_CE_TYPE_SET(class_type, FFI_TYPE_UINT64);
 		} else {
 			return FAILURE;
@@ -293,12 +341,12 @@ static int cffi_implement_check_require(zend_class_entry* interface, zend_class_
 			CFFI_IMP_REQUIRE_ERROR("Const %s::%s value must be greater 0", const_name);
 			return FAILURE;
 		}
-		CFFI_CE_TYPE_SET(class_type, FFI_TYPE_POINTER);
+		// CFFI_CE_TYPE_SET(class_type, FFI_TYPE_POINTER);
 		return SUCCESS;
 	}
 
-	if (Z_TYPE(const_val->value) != IS_ARRAY || !HT_IS_PACKED(Z_ARRVAL(const_val->value))) {
-		CFFI_IMP_REQUIRE_ERROR("Const %s::%s value must be an integer list", const_name);
+	if (Z_TYPE(const_val->value) != IS_ARRAY || zend_hash_num_elements(Z_ARRVAL(const_val->value)) == 0 || !HT_IS_PACKED(Z_ARRVAL(const_val->value))) {
+		CFFI_IMP_REQUIRE_ERROR("Const %s::%s must be defined as a non-empty integer list", const_name);
 		return FAILURE;
 	}
 
@@ -370,7 +418,7 @@ static int cffi_implement_c_func_abi_type(zend_class_entry* interface, zend_clas
 static zend_object* cffi_c_dl_new(zend_class_entry* class_type) {
 	cffi_dl_object* dl;
 	dl = zend_hash_find_ptr(cffi_globals.dl_class_table, class_type->name);
-	if(dl != NULL) {
+	if (dl != NULL) {
 		return &dl->std;
 	}
 
@@ -386,7 +434,6 @@ static zend_object* cffi_c_dl_new(zend_class_entry* class_type) {
 zval* cffi_api_read_property(zend_object* object, zend_string* member, int type, void** cache_slot, zval* rv) {}
 zval* cffi_api_write_property(zend_object* object, zend_string* member, zval* value, void** cache_slot) {}
 
-
 static zend_object* cffi_type_new(zend_class_entry* class_type) /* {{{ */
 {
 	cffi_type_object* ctype;
@@ -395,23 +442,41 @@ static zend_object* cffi_type_new(zend_class_entry* class_type) /* {{{ */
 	zend_object_std_init(&ctype->std, class_type);
 	object_properties_init(&ctype->std, class_type);
 	if (zend_class_implements_interface(class_type, cffi_ce_C_Pointer)) {
-		ctype->type = FFI_TYPE_POINTER;
+		ctype->is_pointer = true;
 	} else if (instanceof_function(class_type, cffi_ce_C_Struct)) {
-		ctype->type = FFI_TYPE_STRUCT;
-	} else if (instanceof_function(class_type, cffi_ce_C_Union)) {
-		ctype->type = FFI_TYPE_STRUCT;
-	}
-	if(zend_class_implements_interface(class_type, cffi_ce_C_CArray)) {
+		zend_property_info* prop;
+		zend_string* key;
+		ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(&class_type->properties_info, key, prop) {
+			if (prop->flags & ZEND_ACC_STATIC) {
+				continue;
+			}
+			if (prop->flags & ZEND_ACC_PUBLIC) {
 
+			}
+		}
+		ZEND_HASH_FOREACH_END();
+		ctype->base_type = FFI_TYPE_STRUCT;
+	} else if (instanceof_function(class_type, cffi_ce_C_Union)) {
+		ctype->base_type = FFI_TYPE_STRUCT;
+	}
+	if (zend_class_implements_interface(class_type, cffi_ce_C_CArray)) {
+		zend_string* const_name_str = ZSTR_INIT_LITERAL("SIZE", 0);
+		zend_class_constant* const_val = zend_hash_find_ptr(CE_CONSTANTS_TABLE(class_type), const_name_str);
+		zend_string_free(const_name_str);
+		ctype->is_array = true;
+		zval* val;
+		zend_long array_size = 1;
+		ZEND_HASH_PACKED_FOREACH_VAL(Z_ARRVAL(const_val->value), val) {
+			array_size *= Z_LVAL_P(val);
+		}ZEND_HASH_FOREACH_END();
+		ctype->v.p = emalloc(cffi_get_type_size(class_type) * array_size);
 	}
 
 	return &ctype->std;
 }
 /* }}} */
 
-static void zend_ffi_pass_arg(void** arg_values, uint32_t n) { /* {{{ */
-	printf("func ptr:%ld\n", arg_values[n]);
-}
+static void zend_ffi_pass_arg(void** arg_values, uint32_t n) { /* {{{ */ printf("func ptr:%ld\n", arg_values[n]); }
 
 /* }}} */
 #define ZEND_FFI_SIZEOF_ARG MAX(FFI_SIZEOF_ARG, sizeof(double))
@@ -461,14 +526,13 @@ static ZEND_NAMED_FUNCTION(cffi_call_api_trampoline) /* {{{ */
 }
 /* }}} */
 
-static void cffi_func_restore_var_destory(cffi_dl_object* dl)
-{
+static void cffi_func_restore_var_destory(cffi_dl_object* dl) {
 	zend_function* method;
 	ZEND_HASH_FOREACH_PTR(&(dl->std.ce->function_table), method) {
-		if(method->common.fn_flags & ZEND_ACC_STATIC) {
+		if (method->common.fn_flags & ZEND_ACC_STATIC) {
 			continue;
 		}
-		if(!(method->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
+		if (!(method->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE)) {
 			continue;
 		}
 		if (method->common.type & ZEND_INTERNAL_FUNCTION) {
@@ -483,14 +547,12 @@ static void cffi_func_restore_var_destory(cffi_dl_object* dl)
 		}
 	}
 	ZEND_HASH_FOREACH_END();
-	if(dl->variable != NULL) {
+	if (dl->variable != NULL) {
 		zend_array_destroy(dl->variable);
 	}
 }
 
-ZEND_METHOD(C_Type, __construct) {
-
-}
+ZEND_METHOD(C_Type, __construct) {}
 
 ZEND_METHOD(C_DL, __construct) {
 	DL_HANDLE handle = NULL;
@@ -505,14 +567,14 @@ ZEND_METHOD(C_DL, __construct) {
 	ZEND_PARSE_PARAMETERS_END();
 
 	cffi_dl_object* dl = (cffi_dl_object*)Z_OBJ_P(getThis());
-	if(dl->is_init) {
+	if (dl->is_init) {
 		return;
 	}
 	zend_class_entry* ce = dl->std.ce;
 
 	if (path) {
 		handle = DL_LOAD(path);
-		if(!handle) {
+		if (!handle) {
 			err = GET_DL_ERROR();
 #ifdef PHP_WIN32
 			if (err && err[0]) {
@@ -537,8 +599,8 @@ ZEND_METHOD(C_DL, __construct) {
 		dl->variable = zend_new_array(0);
 		zend_property_info* prop;
 		zend_string* key;
-		ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(&ce->properties_info, key, prop){
-			if(prop->flags & ZEND_ACC_STATIC) {
+		ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(&ce->properties_info, key, prop) {
+			if (prop->flags & ZEND_ACC_STATIC) {
 				continue;
 			}
 			if (prop->flags & ZEND_ACC_PUBLIC) {
@@ -550,18 +612,19 @@ ZEND_METHOD(C_DL, __construct) {
 				}
 				zend_hash_add_ptr(dl->variable, key, var);
 			}
-		} ZEND_HASH_FOREACH_END();
+		}
+		ZEND_HASH_FOREACH_END();
 	}
 
 	ZEND_HASH_FOREACH_PTR(&ce->function_table, method) {
-		if(method->common.fn_flags & ZEND_ACC_STATIC) {
+		if (method->common.fn_flags & ZEND_ACC_STATIC) {
 			continue;
 		}
 
 		if (method->common.type == ZEND_USER_FUNCTION && method->common.fn_flags & ZEND_ACC_PUBLIC) {
 			void* addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(method->common.function_name));
 			if (!addr) {
-				CFFI_THROWS("Class %s can not resolving C function '%s'",ZSTR_VAL(ce->name), ZSTR_VAL(method->common.function_name))
+				CFFI_THROWS("Class %s can not resolving C function '%s'", ZSTR_VAL(ce->name), ZSTR_VAL(method->common.function_name))
 				cffi_func_restore_var_destory(dl);
 				RETURN_THROWS();
 			}
@@ -592,11 +655,11 @@ ZEND_METHOD(C_DL, __construct) {
 			method->internal_function.reserved[1] = addr;
 			method->internal_function.reserved[2] = args_ffi_type;
 		}
-	} ZEND_HASH_FOREACH_END();
+	}
+	ZEND_HASH_FOREACH_END();
 	dl->is_init = true;
 	zend_hash_add_ptr(cffi_globals.dl_class_table, ce->name, dl);
 }
-
 
 ZEND_METHOD(C_DL, isNull) { RETURN_BOOL(1); }
 
@@ -680,17 +743,24 @@ ZEND_MINIT_FUNCTION(cffi) {
 	cffi_ce_C_Unsigned = register_class_C_Unsigned();
 	cffi_ce_C_Unsigned->interface_gets_implemented = cffi_implement_check_require;
 	cffi_ce_C_Pointer = register_class_C_Pointer();
-	cffi_ce_C_Pointer->interface_gets_implemented = cffi_implement_check_require;
 
-	CFFI_REG_FFI_TYPE(P1, cffi_ce_C_Pointer, POINTER);
-	CFFI_REG_FFI_TYPE(P2, cffi_ce_C_Pointer, POINTER);
-	CFFI_REG_FFI_TYPE(P3, cffi_ce_C_Pointer, POINTER);
-	CFFI_REG_FFI_TYPE(P4, cffi_ce_C_Pointer, POINTER);
+	cffi_ce_C_Pointer->interface_gets_implemented = cffi_implement_check_require;
+	CFFI_REG_TYPE_CLASS_START();
+	CFFI_REG_FFI_TYPE(P1, cffi_ce_C_Pointer, pointer);
+	cffi_ce_C_P1->size = sizeof(void*);
+	CFFI_REG_FFI_TYPE(P2, cffi_ce_C_Pointer, pointer);
+	cffi_ce_C_P2->size = sizeof(void*);
+	CFFI_REG_FFI_TYPE(P3, cffi_ce_C_Pointer, pointer);
+	cffi_ce_C_P3->size = sizeof(void*);
+	CFFI_REG_FFI_TYPE(P4, cffi_ce_C_Pointer, pointer);
+	cffi_ce_C_P4->size = sizeof(void*);
 
 	cffi_ce_C_Type = register_class_C_Type();
+	printf("C\Type addr:%lx\n", cffi_ce_C_Type);
 	cffi_ce_C_Type->interface_gets_implemented = cffi_implement_check_require;
-
-	CFFI_REG_FFI_TYPE_H(Struct, cffi_ce_C_Type, STRUCT);
+	cffi_ce_C_Struct = register_class_C_Struct(cffi_ce_C_Type);
+	cffi_ce_C_Struct->create_object = cffi_type_new;
+	cffi_ce_C_Struct->default_object_handlers = &cffi_type_handlers;
 	memcpy(&cffi_type_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	// cffi_type_handlers.get_constructor = cffi_type_constructor;
 	// // cffi_type_handlers.write_property = cffi_type_write_property;
@@ -700,19 +770,32 @@ ZEND_MINIT_FUNCTION(cffi) {
 	// // cffi_type_handlers.cast_object = cffi_type_cast_obj;
 	// // cffi_type_handlers.do_operation = cffi_type_do_operation;
 	// // cffi_type_handlers.compare = cffi_type_compare;
-
-	CFFI_REG_FFI_TYPE_H(Union, cffi_ce_C_Type, STRUCT);
-	CFFI_REG_FFI_TYPE_H(CVoid, cffi_ce_C_Type, VOID);
-	CFFI_REG_FFI_TYPE_H(I8, cffi_ce_C_Type, SINT8);
-	CFFI_REG_FFI_TYPE_H(Char, cffi_ce_C_I8, SINT8);
-	CFFI_REG_FFI_TYPE_H(I16, cffi_ce_C_Type, SINT16);
-	CFFI_REG_FFI_TYPE_H(I32, cffi_ce_C_Type, SINT32);
-	CFFI_REG_FFI_TYPE_H(I64, cffi_ce_C_Type, SINT64);
-	CFFI_REG_FFI_TYPE_H(F32, cffi_ce_C_Type, FLOAT);
-	CFFI_REG_FFI_TYPE_H(F64, cffi_ce_C_Type, DOUBLE);
+	cffi_ce_C_Union = register_class_C_Union(cffi_ce_C_Type);
+	cffi_ce_C_Union->create_object = cffi_type_new;
+	cffi_ce_C_Union->default_object_handlers = &cffi_type_handlers;
+	CFFI_REG_FFI_TYPE_H(CVoid, cffi_ce_C_Type, void);
+	cffi_ce_C_CVoid->size = sizeof(void);
+	CFFI_REG_FFI_TYPE_H(I8, cffi_ce_C_Type, sint8);
+	printf("I8 addr: %lx\n", cffi_ce_C_I8);
+	printf("num if: %d\n", cffi_ce_C_I8->zce.num_interfaces);
+	cffi_ce_C_I8->size = sizeof(int8_t);
+	CFFI_REG_FFI_TYPE_H(Char, &cffi_ce_C_I8->zce, sint8);
+	cffi_ce_C_Char->size = sizeof(char);
+	CFFI_REG_FFI_TYPE_H(I16, cffi_ce_C_Type, sint16);
+	cffi_ce_C_I16->size = sizeof(int16_t);
+	CFFI_REG_FFI_TYPE_H(I32, cffi_ce_C_Type, sint32);
+	cffi_ce_C_I32->size = sizeof(int32_t);
+	CFFI_REG_FFI_TYPE_H(I64, cffi_ce_C_Type, sint64);
+	cffi_ce_C_I64->size = sizeof(int64_t);
+	CFFI_REG_FFI_TYPE_H(F32, cffi_ce_C_Type, float);
+	cffi_ce_C_F32->size = sizeof(float);
+	CFFI_REG_FFI_TYPE_H(F64, cffi_ce_C_Type, double);
+	cffi_ce_C_F64->size = sizeof(double);
 #ifdef HAVE_LONG_DOUBLE
-	CFFI_REG_FFI_TYPE_H(FL, cffi_ce_C_Type, LONGDOUBLE);
+	CFFI_REG_FFI_TYPE_H(FL, cffi_ce_C_Type, longdouble);
+	cffi_ce_C_FL->size = sizeof(long double);
 #endif
+	CFFI_REG_TYPE_CLASS_END();
 	return SUCCESS;
 }
 
@@ -720,11 +803,9 @@ ZEND_MINIT_FUNCTION(cffi) {
 ZEND_RSHUTDOWN_FUNCTION(cffi) {
 	printf("ZEND_RSHUTDOWN_FUNCTION begin\n");
 
-	cffi_dl_object * dl;
+	cffi_dl_object* dl;
 	zend_function* method;
-	ZEND_HASH_FOREACH_PTR(cffi_globals.dl_class_table, dl) {
-		cffi_func_restore_var_destory(dl);
-	}
+	ZEND_HASH_FOREACH_PTR(cffi_globals.dl_class_table, dl) { cffi_func_restore_var_destory(dl); }
 	ZEND_HASH_FOREACH_END();
 	printf("ZEND_RSHUTDOWN_FUNCTION end\n");
 	return SUCCESS;
@@ -750,9 +831,7 @@ static ZEND_GINIT_FUNCTION(cffi) {
 /* }}} */
 
 /* {{{ ZEND_GINIT_FUNCTION */
-static ZEND_GSHUTDOWN_FUNCTION(cffi) {
-	zend_hash_destroy(cffi_globals->dl_class_table);
-}
+static ZEND_GSHUTDOWN_FUNCTION(cffi) { zend_hash_destroy(cffi_globals->dl_class_table); }
 /* }}} */
 
 /* {{{ cffi_module_entry */

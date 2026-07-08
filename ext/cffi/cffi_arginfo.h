@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 6a5499a43772a0b78e0694c4b2dc172a2545e35e */
+ * Stub hash: b7b6bd023178b3a2697f0676357606c7f4acec73 */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_C_DL___construct, 0, 0, 0)
 ZEND_END_ARG_INFO()
@@ -62,6 +62,16 @@ static const zend_function_entry class_C_DL_methods[] = {
 	ZEND_ME(C_DL, sizeof, arginfo_class_C_DL_sizeof, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC|ZEND_ACC_FINAL)
 	ZEND_FE_END
 };
+
+static zend_class_entry *register_class_C_Type(void)
+{
+	zend_class_entry ce, *class_entry;
+
+	INIT_NS_CLASS_ENTRY(ce, "C", "Type", NULL);
+	class_entry = zend_register_internal_interface(&ce);
+
+	return class_entry;
+}
 
 static zend_class_entry *register_class_C_Pointer(void)
 {
@@ -305,16 +315,6 @@ static zend_class_entry *register_class_C_DL(void)
 
 	INIT_NS_CLASS_ENTRY(ce, "C", "DL", class_C_DL_methods);
 	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_ABSTRACT);
-
-	return class_entry;
-}
-
-static zend_class_entry *register_class_C_Type(void)
-{
-	zend_class_entry ce, *class_entry;
-
-	INIT_NS_CLASS_ENTRY(ce, "C", "Type", NULL);
-	class_entry = zend_register_internal_interface(&ce);
 
 	return class_entry;
 }
