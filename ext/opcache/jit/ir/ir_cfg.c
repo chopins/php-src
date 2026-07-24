@@ -266,14 +266,14 @@ int ir_build_cfg(ir_ctx *ctx)
 				ir_bitset_incl(bb_leaks, *p);
 			}
 		}
-		/* Skip control nodes untill BB start */
+		/* Skip control nodes until BB start */
 		ref = insn->op1;
 		while (1) {
 			insn = &ctx->ir_base[ref];
 			if (IR_IS_BB_START(insn->op)) {
 				break;
 			}
-			ref = insn->op1; // follow connected control blocks untill BB start
+			ref = insn->op1; // follow connected control blocks until BB start
 		}
 		/* Mark BB Start */
 		bb_count++;
@@ -306,7 +306,7 @@ int ir_build_cfg(ir_ctx *ctx)
 			IR_ASSERT(IR_IS_BB_START(insn->op));
 			/* Remember BB start */
 			start = ref;
-			/* Skip control nodes untill BB end */
+			/* Skip control nodes until BB end */
 			while (1) {
 				ref = ir_next_control(ctx, ref);
 				insn = &ctx->ir_base[ref];
@@ -1502,6 +1502,23 @@ static bool ir_is_merged_loop_back_edge(ir_ctx *ctx, uint32_t hdr, uint32_t b)
 }
 #endif
 
+static bool ir_should_align_loop(ir_ctx *ctx, ir_chain *chains, uint32_t b, ir_block *bb)
+{
+	uint32_t n = bb->predecessors_count;
+	uint32_t *p = ctx->cfg_edges + bb->predecessors;
+
+	for (; n > 0; p++, n--) {
+		uint32_t pred = *p;
+		if (chains[pred].head) {
+			if (ir_chain_head(chains, pred) == b) return 1;
+		} else {
+			if (ir_should_align_loop(ctx, chains, b, &ctx->cfg_blocks[pred])) return 1;
+		}
+	}
+
+	return 0;
+}
+
 static int ir_schedule_blocks_bottom_up(ir_ctx *ctx)
 {
 	uint32_t max_edges_count = ctx->cfg_edges_count / 2;
@@ -1862,7 +1879,7 @@ restart:
 		if (chains[b].head == b) {
 			bb = &ctx->cfg_blocks[b];
 			if (bb->loop_depth) {
-				if ((bb->flags & IR_BB_LOOP_HEADER) || ir_chain_head(chains, bb->loop_header) == b) {
+				if (ir_should_align_loop(ctx, chains, b, bb)) {
 					bb->flags |= IR_BB_ALIGN_LOOP;
 				}
 			}

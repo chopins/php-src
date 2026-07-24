@@ -1,14 +1,12 @@
 /*
   +----------------------------------------------------------------------+
-  | Copyright (c) The PHP Group                                          |
+  | Copyright © The PHP Group and Contributors.                          |
   +----------------------------------------------------------------------+
-  | This source file is subject to version 3.01 of the PHP license,      |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | https://www.php.net/license/3_01.txt                                 |
-  | If you did not receive a copy of the PHP license and are unable to   |
-  | obtain it through the world-wide-web, please send a note to          |
-  | license@php.net so we can mail you a copy immediately.               |
+  | This source file is subject to the Modified BSD License that is      |
+  | bundled with this package in the file LICENSE, and is available      |
+  | through the World Wide Web at <https://www.php.net/license/>.        |
+  |                                                                      |
+  | SPDX-License-Identifier: BSD-3-Clause                                |
   +----------------------------------------------------------------------+
   | Authors: Edin Kadribasic <edink@emini.dk>                            |
   |          Ilia Alshanestsky <ilia@prohost.org>                        |
@@ -716,6 +714,9 @@ void pgsqlCopyFromArray_internal(INTERNAL_FUNCTION_PARAMETERS)
 		if (Z_TYPE_P(pg_rows) == IS_ARRAY) {
 			ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(pg_rows), tmp) {
 				if (!_pdo_pgsql_send_copy_data(H, tmp)) {
+					if (EG(exception)) {
+						RETURN_THROWS();
+					}
 					pdo_pgsql_error(dbh, PGRES_FATAL_ERROR, NULL);
 					PDO_HANDLE_DBH_ERR();
 					RETURN_FALSE;
@@ -738,6 +739,9 @@ void pgsqlCopyFromArray_internal(INTERNAL_FUNCTION_PARAMETERS)
 				tmp = iter->funcs->get_current_data(iter);
 				if (!_pdo_pgsql_send_copy_data(H, tmp)) {
 					zend_iterator_dtor(iter);
+					if (EG(exception)) {
+						RETURN_THROWS();
+					}
 					pdo_pgsql_error(dbh, PGRES_FATAL_ERROR, NULL);
 					PDO_HANDLE_DBH_ERR();
 					RETURN_FALSE;

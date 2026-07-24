@@ -2,21 +2,21 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) Zend Technologies Ltd. (http://www.zend.com)           |
+   | Copyright © Zend Technologies Ltd., a subsidiary company of          |
+   |     Perforce Software, Inc., and Contributors.                       |
    +----------------------------------------------------------------------+
-   | This source file is subject to version 2.00 of the Zend license,     |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available through the world-wide-web at the following url:           |
-   | http://www.zend.com/license/2_00.txt.                                |
-   | If you did not receive a copy of the Zend license and are unable to  |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@zend.com so we can mail you a copy immediately.              |
+   | This source file is subject to the Modified BSD License that is      |
+   | bundled with this package in the file LICENSE, and is available      |
+   | through the World Wide Web at <https://www.php.net/license/>.        |
+   |                                                                      |
+   | SPDX-License-Identifier: BSD-3-Clause                                |
    +----------------------------------------------------------------------+
    | Authors: Andi Gutmans <andi@php.net>                                 |
    |          Zeev Suraski <zeev@php.net>                                 |
    +----------------------------------------------------------------------+
 */
 
+#include "php_version.h"
 #include "zend.h"
 #include "zend_API.h"
 #include "zend_attributes.h"
@@ -953,7 +953,6 @@ ZEND_FUNCTION(method_exists)
 {
 	zval *klass;
 	zend_string *method_name;
-	zend_string *lcname;
 	zend_class_entry *ce;
 	zend_function *func;
 
@@ -970,13 +969,11 @@ ZEND_FUNCTION(method_exists)
 			RETURN_FALSE;
 		}
 	} else {
-		zend_argument_type_error(1, "must be of type object|string, %s given", zend_zval_value_name(klass));
+		zend_wrong_parameter_type_error(1, Z_EXPECTED_OBJECT_OR_STRING, klass);
 		RETURN_THROWS();
 	}
 
-	lcname = zend_string_tolower(method_name);
-	func = zend_hash_find_ptr(&ce->function_table, lcname);
-	zend_string_release_ex(lcname, 0);
+	func = zend_hash_find_ptr_lc(&ce->function_table, method_name);
 
 	if (func) {
 		/* Exclude shadow properties when checking a method on a specific class. Include
@@ -1024,7 +1021,7 @@ static void _property_exists(zval *return_value, const zval *object, zend_string
 	} else if (Z_TYPE_P(object) == IS_OBJECT) {
 		ce = Z_OBJCE_P(object);
 	} else {
-		zend_argument_type_error(1, "must be of type object|string, %s given", zend_zval_value_name(object));
+		zend_wrong_parameter_type_error(1, Z_EXPECTED_OBJECT_OR_STRING, object);
 		RETURN_THROWS();
 	}
 
@@ -2219,7 +2216,6 @@ ZEND_FUNCTION(extension_loaded)
 ZEND_FUNCTION(get_extension_funcs)
 {
 	zend_string *extension_name;
-	zend_string *lcname;
 	bool array;
 	zend_module_entry *module;
 	zend_function *zif;
@@ -2228,9 +2224,7 @@ ZEND_FUNCTION(get_extension_funcs)
 		RETURN_THROWS();
 	}
 	if (strncasecmp(ZSTR_VAL(extension_name), "zend", sizeof("zend"))) {
-		lcname = zend_string_tolower(extension_name);
-		module = zend_hash_find_ptr(&module_registry, lcname);
-		zend_string_release_ex(lcname, 0);
+		module = zend_hash_find_ptr_lc(&module_registry, extension_name);
 	} else {
 		module = zend_hash_str_find_ptr(&module_registry, "core", sizeof("core") - 1);
 	}

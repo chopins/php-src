@@ -1,14 +1,12 @@
 /*
   +----------------------------------------------------------------------+
-  | Copyright (c) The PHP Group                                          |
+  | Copyright © The PHP Group and Contributors.                          |
   +----------------------------------------------------------------------+
-  | This source file is subject to version 3.01 of the PHP license,      |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | https://www.php.net/license/3_01.txt                                 |
-  | If you did not receive a copy of the PHP license and are unable to   |
-  | obtain it through the world-wide-web, please send a note to          |
-  | license@php.net so we can mail you a copy immediately.               |
+  | This source file is subject to the Modified BSD License that is      |
+  | bundled with this package in the file LICENSE, and is available      |
+  | through the World Wide Web at <https://www.php.net/license/>.        |
+  |                                                                      |
+  | SPDX-License-Identifier: BSD-3-Clause                                |
   +----------------------------------------------------------------------+
   | Authors: Brad Lafountain <rodif_bl@yahoo.com>                        |
   |          Shane Caraveo <shane@caraveo.com>                           |
@@ -1526,22 +1524,22 @@ static sdlPtr get_sdl_from_cache(const char *fn, const char *uri, size_t uri_len
 	char *in, *buf;
 
 	f = open(fn, O_RDONLY|O_BINARY);
-	if (f < 0) {
+	if (UNEXPECTED(f < 0)) {
 		return NULL;
 	}
-	if (fstat(f, &st) != 0) {
+	if (UNEXPECTED(fstat(f, &st) != 0)) {
 		close(f);
 		return NULL;
 	}
 	buf = in = emalloc(st.st_size);
-	if (read(f, in, st.st_size) != st.st_size) {
+	if (UNEXPECTED(read(f, in, st.st_size) != st.st_size)) {
 		close(f);
 		efree(in);
 		return NULL;
 	}
 	close(f);
 
-	if (strncmp(in,"wsdl",4) != 0 || in[4] != WSDL_CACHE_VERSION || in[5] != '\0') {
+	if (UNEXPECTED(strncmp(in,"wsdl",4) != 0 || in[4] != WSDL_CACHE_VERSION || in[5] != '\0')) {
 		unlink(fn);
 		efree(buf);
 		return NULL;
@@ -2098,7 +2096,7 @@ static void add_sdl_to_cache(const char *fn, const char *uri, time_t t, sdlPtr s
 	zend_string *temp_file_path;
 	f = php_open_temporary_fd_ex(SOAP_GLOBAL(cache_dir), "tmp.wsdl.", &temp_file_path, PHP_TMP_FILE_SILENT);
 
-	if (f < 0) {return;}
+	if (UNEXPECTED(f < 0)) {return;}
 
 	zend_hash_init(&tmp_types, 0, NULL, NULL, 0);
 	zend_hash_init(&tmp_encoders, 0, NULL, NULL, 0);
