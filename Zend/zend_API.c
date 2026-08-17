@@ -1129,18 +1129,6 @@ static zend_result zend_parse_arg(uint32_t arg_num, zval *arg, va_list *va, cons
 }
 /* }}} */
 
-ZEND_API zend_result zend_parse_parameter(int flags, uint32_t arg_num, zval *arg, const char *spec, ...)
-{
-	va_list va;
-	zend_result ret;
-
-	va_start(va, spec);
-	ret = zend_parse_arg(arg_num, arg, &va, &spec, flags);
-	va_end(va);
-
-	return ret;
-}
-
 static ZEND_COLD void zend_parse_parameters_debug_error(const char *msg) {
 	const zend_function *active_function = EG(current_execute_data)->func;
 	const char *class_name = active_function->common.scope
@@ -2411,9 +2399,6 @@ ZEND_API void add_property_zval_ex(zval *arg, const char *key, size_t key_len, z
 
 ZEND_API zend_result zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 {
-	size_t name_len;
-	zend_string *lcname;
-
 	if (module->module_started) {
 		return SUCCESS;
 	}
@@ -2425,20 +2410,15 @@ ZEND_API zend_result zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 
 		while (dep->name) {
 			if (dep->type == MODULE_DEP_REQUIRED) {
-				zend_module_entry *req_mod;
+				zend_module_entry *req_mod = zend_hash_str_find_ptr_lc(
+					&module_registry, dep->name, strlen(dep->name));
 
-				name_len = strlen(dep->name);
-				lcname = zend_string_alloc(name_len, 0);
-				zend_str_tolower_copy(ZSTR_VAL(lcname), dep->name, name_len);
-
-				if ((req_mod = zend_hash_find_ptr(&module_registry, lcname)) == NULL || !req_mod->module_started) {
-					zend_string_efree(lcname);
+				if (req_mod == NULL || !req_mod->module_started) {
 					/* TODO: Check version relationship */
 					zend_error(E_CORE_WARNING, "Cannot load module \"%s\" because required module \"%s\" is not loaded", module->name, dep->name);
 					module->module_started = 0;
 					return FAILURE;
 				}
-				zend_string_efree(lcname);
 			}
 			++dep;
 		}
@@ -2626,17 +2606,12 @@ ZEND_API zend_module_entry* zend_register_module_ex(zend_module_entry *module, i
 
 		while (dep->name) {
 			if (dep->type == MODULE_DEP_CONFLICTS) {
-				name_len = strlen(dep->name);
-				lcname = zend_string_alloc(name_len, 0);
-				zend_str_tolower_copy(ZSTR_VAL(lcname), dep->name, name_len);
-
-				if (zend_hash_exists(&module_registry, lcname) || zend_get_extension(dep->name)) {
-					zend_string_efree(lcname);
+				if (zend_hash_str_find_ptr_lc(&module_registry, dep->name, strlen(dep->name)) != NULL
+						|| zend_get_extension(dep->name)) {
 					/* TODO: Check version relationship */
 					zend_error(E_CORE_WARNING, "Cannot load module \"%s\" because conflicting module \"%s\" is already loaded", module->name, dep->name);
 					return NULL;
 				}
-				zend_string_efree(lcname);
 			}
 			++dep;
 		}
@@ -3263,12 +3238,9 @@ ZEND_API zend_result zend_register_functions(zend_class_entry *scope, const zend
 	if (unload) { /* before unloading, display all remaining bad function in the module */
 		while (ptr->fname) {
 			fname_len = strlen(ptr->fname);
-			lowercase_name = zend_string_alloc(fname_len, 0);
-			zend_str_tolower_copy(ZSTR_VAL(lowercase_name), ptr->fname, fname_len);
-			if (zend_hash_exists(target_function_table, lowercase_name)) {
+			if (zend_hash_str_find_ptr_lc(target_function_table, ptr->fname, fname_len) != NULL) {
 				zend_error(error_type, "Function registration failed - duplicate name - %s%s%s", scope ? ZSTR_VAL(scope->name) : "", scope ? "::" : "", ptr->fname);
 			}
-			zend_string_efree(lowercase_name);
 			ptr++;
 		}
 		zend_unregister_functions(functions, count, target_function_table);
@@ -3830,7 +3802,6 @@ static zend_always_inline bool zend_is_method_callable(zend_string *callable, co
 	HashTable *ftable;
 	bool call_via_handler = false;
 	zend_class_entry *scope;
-	zval *zv;
 
 	fcc->calling_scope = NULL;
 
@@ -3916,8 +3887,7 @@ static zend_always_inline bool zend_is_method_callable(zend_string *callable, co
 		if (fcc->function_handler) {
 			retval = true;
 		}
-	} else if ((zv = zend_hash_find(ftable, lmname)) != NULL) {
-		fcc->function_handler = Z_PTR_P(zv);
+	} else if ((fcc->function_handler = zend_hash_find_ptr(ftable, lmname)) != NULL) {
 		retval = true;
 		if ((fcc->function_handler->op_array.fn_flags & ZEND_ACC_CHANGED) &&
 		    !strict_class) {
@@ -3925,10 +3895,8 @@ static zend_always_inline bool zend_is_method_callable(zend_string *callable, co
 			if (scope &&
 			    instanceof_function(fcc->function_handler->common.scope, scope)) {
 
-				zv = zend_hash_find(&scope->function_table, lmname);
-				if (zv != NULL) {
-					zend_function *priv_fbc = Z_PTR_P(zv);
-
+				zend_function *priv_fbc = zend_hash_find_ptr(&scope->function_table, lmname);
+				if (priv_fbc != NULL) {
 					if ((priv_fbc->common.fn_flags & ZEND_ACC_PRIVATE)
 					 && priv_fbc->common.scope == scope) {
 						fcc->function_handler = priv_fbc;
@@ -4240,7 +4208,7 @@ again:
 			}
 
 		case IS_OBJECT:
-			if (Z_OBJ_HANDLER_P(callable, get_closure) && Z_OBJ_HANDLER_P(callable, get_closure)(Z_OBJ_P(callable), &fcc->calling_scope, &fcc->function_handler, &fcc->object, 1) == FAILURE) {
+			if (!Z_OBJ_HANDLER_P(callable, get_closure) || Z_OBJ_HANDLER_P(callable, get_closure)(Z_OBJ_P(callable), &fcc->calling_scope, &fcc->function_handler, &fcc->object, 1) == FAILURE) {
 				if (error) *error = estrdup("no array or string given");
 				return 0;
 			}
@@ -4833,6 +4801,9 @@ ZEND_API zend_class_constant *zend_declare_typed_class_constant(zend_class_entry
 	if (zend_string_equals_ci(name, ZSTR_KNOWN(ZEND_STR_CLASS))) {
 		zend_error_noreturn(ce->type == ZEND_INTERNAL_CLASS ? E_CORE_ERROR : E_COMPILE_ERROR,
 				"A class constant must not be called 'class'; it is reserved for class name fetching");
+	} else if (zend_string_equals_literal_ci(name, "namespace")) {
+		zend_error(E_DEPRECATED, "Declaring %s constant called 'namespace' is deprecated",
+			zend_get_object_type(ce));
 	}
 
 	if (Z_TYPE_P(value) == IS_STRING && !ZSTR_IS_INTERNED(Z_STR_P(value))) {
@@ -5236,23 +5207,6 @@ ZEND_API bool zend_is_iterable(const zval *iterable) /* {{{ */
 			return 1;
 		case IS_OBJECT:
 			return zend_class_implements_interface(Z_OBJCE_P(iterable), zend_ce_traversable);
-		default:
-			return 0;
-	}
-}
-/* }}} */
-
-ZEND_API bool zend_is_countable(const zval *countable) /* {{{ */
-{
-	switch (Z_TYPE_P(countable)) {
-		case IS_ARRAY:
-			return 1;
-		case IS_OBJECT:
-			if (Z_OBJ_HT_P(countable)->count_elements) {
-				return 1;
-			}
-
-			return zend_class_implements_interface(Z_OBJCE_P(countable), zend_ce_countable);
 		default:
 			return 0;
 	}

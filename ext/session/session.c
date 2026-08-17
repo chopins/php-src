@@ -429,9 +429,9 @@ static zend_result php_session_initialize(void)
 	}
 
 	/* Open session handler first */
-	if (PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name)) == FAILURE
-		/* || PS(mod_data) == NULL */ /* FIXME: open must set valid PS(mod_data) with success */
-	) {
+	const zend_result open_status = PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name));
+	/* NOTE: PS(mod_data) might be null if the session is a custom userland session handler */
+	if (open_status == FAILURE) {
 		php_session_abort();
 		if (!EG(exception)) {
 			php_error_docref(NULL, E_WARNING, "Failed to initialize storage module: %s (path: %s)", PS(mod)->s_name, ZSTR_VAL(PS(save_path)));
@@ -876,7 +876,7 @@ static PHP_INI_MH(OnUpdateRfc1867Freq)
 		return FAILURE;
 	}
 
-	if (ZSTR_LEN(new_value) > 0 && ZSTR_VAL(new_value)[ZSTR_LEN(new_value) - 1] == '%') {
+	if (zend_string_ends_with_literal(new_value, "%")) {
 		if (new_freq > 100) {
 			php_error_docref(NULL, E_WARNING, "session.upload_progress.freq must be less than or equal to 100%%");
 			return FAILURE;
@@ -2158,6 +2158,9 @@ PHP_FUNCTION(session_set_save_handler)
 		} else if (zend_hash_find_ptr(object_methods, create_sid_name)) {
 			/* For BC reasons we accept methods even if the class does not implement the interface */
 			SESSION_SET_USER_HANDLER_OO(ps_create_sid, zend_string_copy(create_sid_name));
+		} else {
+			php_error_docref(NULL, E_DEPRECATED,
+				"Providing an object to argument #1 ($sessionhandler) which does not have the create_sid() method defined is deprecated");
 		}
 		zend_string_release_ex(create_sid_name, false);
 
@@ -2179,6 +2182,9 @@ PHP_FUNCTION(session_set_save_handler)
 			if (zend_hash_find_ptr(object_methods, validate_sid_name)) {
 				/* For BC reasons we accept methods even if the class does not implement the interface */
 				SESSION_SET_USER_HANDLER_OO(ps_validate_sid, zend_string_copy(validate_sid_name));
+			} else {
+				php_error_docref(NULL, E_DEPRECATED,
+					"Providing an object to argument #1 ($sessionhandler) which does not have the validateId() method defined is deprecated");
 			}
 			if (zend_hash_find_ptr(object_methods, update_timestamp_name)) {
 				/* For BC reasons we accept methods even if the class does not implement the interface */
@@ -2399,7 +2405,10 @@ PHP_FUNCTION(session_regenerate_id)
 	zend_string_release_ex(PS(id), false);
 	PS(id) = NULL;
 
-	if (PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name)) == FAILURE) {
+	/* Open session handler first */
+	const zend_result open_status = PS(mod)->s_open(&PS(mod_data), PS(save_path), PS(session_name));
+	/* NOTE: PS(mod_data) might be null if the session is a custom userland session handler */
+	if (open_status == FAILURE) {
 		PS(session_status) = php_session_none;
 		if (!EG(exception)) {
 			zend_throw_error(NULL, "Failed to open session: %s (path: %s)", PS(mod)->s_name, ZSTR_VAL(PS(save_path)));
@@ -2480,10 +2489,14 @@ PHP_FUNCTION(session_create_id)
 		}
 	}
 
+	/* NOTE: PS(mod_data) might be null if the session is a custom userland session handler */
 	if (!PS(in_save_handler) && PS(session_status) == php_session_active) {
 		int limit = 3;
 		while (limit--) {
 			new_id = PS(mod)->s_create_sid(&PS(mod_data));
+			if (!new_id) {
+				break;
+			}
 			if (!PS(mod)->s_validate_sid || (PS(mod_user_implemented) && Z_ISUNDEF(PS(mod_user_names).ps_validate_sid))) {
 				break;
 			} else {
@@ -2505,6 +2518,9 @@ PHP_FUNCTION(session_create_id)
 		zend_string_release_ex(new_id, false);
 	} else {
 		smart_str_free(&id);
+		if (EG(exception)) {
+			RETURN_THROWS();
+		}
 		php_error_docref(NULL, E_WARNING, "Failed to create new ID");
 		RETURN_FALSE;
 	}
@@ -2919,6 +2935,20 @@ static PHP_GINIT_FUNCTION(ps)
 	ps_globals->random_seeded = false;
 }
 
+static int session_handler_interface_gets_implemented(zend_class_entry *self, zend_class_entry *class) {
+	if (!zend_hash_str_exists(&class->function_table, ZEND_STRL("create_sid"))) {
+		zend_error(E_WARNING,
+			"Class %s implementing SessionHandlerInterface is missing the create_sid() method which will be required in PHP 9.0",
+			ZSTR_VAL(class->name));
+	}
+	if (!zend_hash_str_exists(&class->function_table, ZEND_STRL("validateid"))) {
+		zend_error(E_WARNING,
+			"Class %s implementing SessionHandlerInterface is missing the validateId() method which will be required in PHP 9.0",
+			ZSTR_VAL(class->name));
+	}
+	return SUCCESS;
+}
+
 static PHP_MINIT_FUNCTION(session)
 {
 	zend_register_auto_global(zend_string_init_interned(ZEND_STRL("_SESSION"), true), false, NULL);
@@ -2937,6 +2967,7 @@ static PHP_MINIT_FUNCTION(session)
 
 	/* Register interfaces */
 	php_session_iface_entry = register_class_SessionHandlerInterface();
+	php_session_iface_entry->interface_gets_implemented = session_handler_interface_gets_implemented;
 
 	php_session_id_iface_entry = register_class_SessionIdInterface();
 

@@ -373,8 +373,6 @@ ZEND_API zend_string *zend_zval_get_legacy_type(const zval *arg);
 ZEND_API zend_result zend_parse_method_parameters(uint32_t num_args, zval *this_ptr, const char *type_spec, ...);
 ZEND_API zend_result zend_parse_method_parameters_ex(int flags, uint32_t num_args, zval *this_ptr, const char *type_spec, ...);
 
-ZEND_API zend_result zend_parse_parameter(int flags, uint32_t arg_num, zval *arg, const char *spec, ...);
-
 /* End of parameter parsing API -- andrei */
 
 ZEND_API zend_result zend_register_functions(zend_class_entry *scope, const zend_function_entry *functions, HashTable *function_table, int type);
@@ -961,8 +959,6 @@ static zend_always_inline const char *zend_get_object_type_uc(const zend_class_e
 }
 
 ZEND_API bool zend_is_iterable(const zval *iterable);
-
-ZEND_API bool zend_is_countable(const zval *countable);
 
 ZEND_API void zend_convert_internal_arg_info(zend_arg_info *new_arg_info,
 		const zend_internal_arg_info *arg_info, bool is_return_info,
@@ -1700,10 +1696,6 @@ ZEND_API ZEND_COLD void zend_class_redeclaration_error_ex(int type, zend_string 
 		SEPARATE_ZVAL_NOREF(_arg); \
 	}
 
-/* get the zval* for a previously parsed argument */
-#define Z_PARAM_GET_PREV_ZVAL(dest) \
-	zend_parse_arg_zval_deref(_arg, &dest, 0);
-
 /* old "|" */
 #define Z_PARAM_OPTIONAL \
 	_optional = 1;
@@ -1873,10 +1865,6 @@ ZEND_API ZEND_COLD void zend_class_redeclaration_error_ex(int type, zend_string 
 
 #define Z_PARAM_FUNC_NO_TRAMPOLINE_FREE_OR_NULL(dest_fci, dest_fcc) \
 	Z_PARAM_FUNC_EX2(dest_fci, dest_fcc, 1, 0, false)
-
-#define Z_PARAM_FUNC_OR_NULL_WITH_ZVAL(dest_fci, dest_fcc, dest_zp) \
-	Z_PARAM_FUNC_EX2(dest_fci, dest_fcc, 1, 0, true) \
-	Z_PARAM_GET_PREV_ZVAL(dest_zp)
 
 /* old "h" */
 #define Z_PARAM_ARRAY_HT_EX2(dest, check_null, deref, separate) \
@@ -2057,9 +2045,9 @@ ZEND_API ZEND_COLD void zend_class_redeclaration_error_ex(int type, zend_string 
 
 #define Z_PARAM_ENUM(dest, _ce) \
 	{ \
-		zend_object *_tmp = NULL; \
-		Z_PARAM_OBJ_OF_CLASS(_tmp, _ce); \
-		dest = zend_enum_fetch_case_id(_tmp); \
+		zend_object *__##dest = NULL; \
+		Z_PARAM_OBJ_OF_CLASS(__##dest, _ce); \
+		dest = zend_enum_fetch_case_id(__##dest); \
 	}
 
 /* old "p" */

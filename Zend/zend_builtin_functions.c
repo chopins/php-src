@@ -568,13 +568,25 @@ ZEND_FUNCTION(define)
 		Z_PARAM_BOOL(non_cs)
 	ZEND_PARSE_PARAMETERS_END();
 
+	if (ZEND_NUM_ARGS() == 3) {
+		zend_error(E_DEPRECATED,
+			"define(): Argument #3 ($case_insensitive) is ignored and treated as false since declaration of case-insensitive constants is no longer supported, passing the argument explicitly is unnecessary"
+		);
+		if (UNEXPECTED(EG(exception))) {
+			RETURN_THROWS();
+		}
+	}
+
 	if (zend_memnstr(ZSTR_VAL(name), "::", sizeof("::") - 1, ZSTR_VAL(name) + ZSTR_LEN(name))) {
 		zend_argument_value_error(1, "cannot be a class constant");
 		RETURN_THROWS();
 	}
 
 	if (non_cs) {
-		zend_error(E_WARNING, "define(): Argument #3 ($case_insensitive) is ignored since declaration of case-insensitive constants is no longer supported");
+		zend_error(E_WARNING, "define(): Argument #3 ($case_insensitive) is ignored since declaration of case-insensitive constants is no longer supported, this will be an error in PHP 9.0");
+		if (UNEXPECTED(EG(exception))) {
+			RETURN_THROWS();
+		}
 	}
 
 	if (Z_TYPE_P(val) == IS_ARRAY && Z_REFCOUNTED_P(val)) {
@@ -945,6 +957,11 @@ ZEND_FUNCTION(get_class_methods)
 			zend_hash_next_index_insert_new(Z_ARRVAL_P(return_value), &method_name);
 		}
 	} ZEND_HASH_FOREACH_END();
+
+	if (ce == zend_ce_closure) {
+		ZVAL_STR_COPY(&method_name, ZSTR_KNOWN(ZEND_STR_MAGIC_INVOKE));
+		zend_hash_next_index_insert_new(Z_ARRVAL_P(return_value), &method_name);
+	}
 }
 /* }}} */
 
@@ -2190,15 +2207,12 @@ ZEND_FUNCTION(debug_backtrace)
 ZEND_FUNCTION(extension_loaded)
 {
 	zend_string *extension_name;
-	zend_string *lcname;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &extension_name) == FAILURE) {
 		RETURN_THROWS();
 	}
 
-	lcname = zend_string_tolower(extension_name);
-	RETVAL_BOOL(zend_hash_exists(&module_registry, lcname));
-	zend_string_release_ex(lcname, 0);
+	RETURN_BOOL(zend_hash_find_ptr_lc(&module_registry, extension_name) != NULL);
 }
 /* }}} */
 
